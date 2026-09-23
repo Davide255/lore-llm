@@ -1,32 +1,27 @@
-import React from 'react';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
-import { Colors } from '@/constants/theme';
 
-export default function TabLayout() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
+import { useTheme } from '@/theme';
 
+/** System tab bar (liquid glass on iOS 26, Material 3 on Android). */
+export default function TabsLayout() {
+  const t = useTheme();
   return (
-    <NativeTabs
-      backgroundColor={colors.background}
-      tintColor={colors.primary}
-      iconColor={{ default: colors.textSecondary, selected: colors.primary }}
-      labelStyle={{ color: colors.textSecondary, selected: { color: colors.primary } }}
-      blurEffect="systemMaterial"
-      disableTransparentOnScrollEdge
-      minimizeBehavior="onScrollDown">
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Knowledge</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="book.closed" />
+    <NativeTabs tintColor={t.accentText} minimizeBehavior="onScrollDown">
+      <NativeTabs.Trigger name="(projects)">
+        <NativeTabs.Trigger.Icon sf={{ default: 'folder', selected: 'folder.fill' }} md="folder" />
+        <NativeTabs.Trigger.Label>Progetti</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="categories">
-        <NativeTabs.Trigger.Label>Categories</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="tag" />
+      <NativeTabs.Trigger name="search" role="search">
+        <NativeTabs.Trigger.Icon sf="magnifyingglass" md="search" />
+        <NativeTabs.Trigger.Label>Cerca</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="activity">
+        <NativeTabs.Trigger.Icon sf={{ default: 'bolt', selected: 'bolt.fill' }} md="bolt" />
+        <NativeTabs.Trigger.Label>Attività</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="gearshape" />
+        <NativeTabs.Trigger.Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} md="settings" />
+        <NativeTabs.Trigger.Label>Impostazioni</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
