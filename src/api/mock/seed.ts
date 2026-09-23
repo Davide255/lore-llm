@@ -212,7 +212,7 @@ React 18 + TypeScript. Routing e componenti da Framework7, grafici con MUI X Cha
 `,
   },
   { path: 'Sito Athly/pagine/home.md', ago: 1 * D, content: `# Home\n\nMessaggio principale: "Allena di più, amministra di meno."\n` },
-  { path: 'Sito Athly/pagine/prezzi.md', ago: 2 * D, content: `# Prezzi\n\nTre piani: Starter, Pro, Studio.\n` },
+  { path: 'Sito Athly/pagine/prezzi.md', ago: 2 * D, content: `# Prezzi\n\nTre piani: Starter, Pro, Studio.\n\n| Piano | Clienti | Prezzo/mese | Note |\n|:------|:-------:|------------:|------|\n| **Starter** | 10 | 19 € | Solo app |\n| **Pro** | 50 | 49 € | Export PDF, \`API\` |\n| **Studio** | illimitati | 99 € | Più trainer, [SEO](../seo.md) |\n` },
   { path: 'Sito Athly/pagine/contatti.md', ago: 5 * D, content: `# Contatti\n\nForm con invio a HubSpot.\n` },
   { path: 'Sito Athly/seo.md', ago: 3 * D, content: `# SEO\n\nParole chiave: gestionale personal trainer, app allenamento clienti.\n` },
   { path: 'Sito Athly/deploy.md', ago: 6 * D, content: `# Deploy\n\nCloudflare Pages dal branch \`main\`.\n` },

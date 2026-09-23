@@ -31,7 +31,7 @@ import {
 } from './seed';
 import { byteLength } from '@/lib/format';
 import { diffLines, diffStats } from '@/lib/diff';
-import { checklistProgress, parse, plainText } from '@/lib/markdown';
+import { checklistProgress, parse, parseTable, plainText } from '@/lib/markdown';
 import {
   CHECKLIST_FILE,
   INDEX_FILE,
@@ -590,7 +590,13 @@ export class MockKnowledgeBaseClient implements KnowledgeBaseClient {
     const all: (SearchHit & { matches: number; updatedAt: string })[] = [];
     for (const [path, f] of Object.entries(s.files)) {
       const lines = parse(f.content).flatMap((b) =>
-        'text' in b ? (b.type === 'code' ? b.text.split('\n') : [plainText(b.text)]) : [],
+        b.type === 'code'
+          ? b.text.split('\n')
+          : b.type === 'table'
+            ? tableLines(b.text)
+            : 'text' in b
+              ? [plainText(b.text)]
+              : [],
       );
       const matches = lines.reduce((n, l) => n + count(l), 0);
       if (!matches) continue;
@@ -727,6 +733,12 @@ export class MockKnowledgeBaseClient implements KnowledgeBaseClient {
     this.persist();
     return s.settings;
   }
+}
+
+/** One searchable line per table row, cells separated like in a snippet. */
+function tableLines(src: string) {
+  const { header, rows } = parseTable(src);
+  return [header, ...rows].map((r) => r.map(plainText).join(' · '));
 }
 
 function makeSnippet(line: string, q: string) {

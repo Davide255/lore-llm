@@ -1,7 +1,7 @@
 /**
  * Minimal, line-oriented markdown model used by both the reader and the
  * block editor. It covers what a knowledge base needs (headings, paragraphs,
- * bullet/ordered/task lists, quotes, fenced code, rules) and round-trips:
+ * bullet/ordered/task lists, quotes, fenced code, rules, GFM tables) and round-trips:
  * `serialize(parse(src))` is a normalized but semantically equal document.
  */
 
@@ -13,6 +13,8 @@ export type Block =
   | { type: 'task'; indent: number; checked: boolean; text: string; line: number }
   | { type: 'quote'; text: string; line: number }
   | { type: 'code'; lang: string; text: string; line: number }
+  /** GFM table. `text` is the table's source; cells come from `parseTable`. */
+  | { type: 'table'; text: string; line: number }
   | { type: 'rule'; line: number };
 
 export type BlockType = Block['type'];
@@ -24,6 +26,8 @@ const ORDERED = /^(\s*)(\d+)[.)]\s+(.*)$/;
 const QUOTE = /^\s*>\s?(.*)$/;
 const FENCE = /^\s*```\s*([\w+-]*)\s*$/;
 const RULE = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
+
+const TABLE_DELIM = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
 
 function indentOf(ws: string) {
   const spaces = ws.replace(/\t/g, '  ').length;
@@ -40,6 +44,55 @@ function isSpecial(line: string) {
     FENCE.test(line) ||
     RULE.test(line)
   );
+}
+
+export type Align = 'left' | 'center' | 'right' | null;
+
+/** Split a table row on unescaped pipes, dropping the optional outer ones. */
+function splitRow(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith('|')) s = s.slice(1);
+  if (s.endsWith('|') && !s.endsWith('\\|')) s = s.slice(0, -1);
+  const cells: string[] = [];
+  let cur = '';
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\' && s[i + 1] === '|') {
+      cur += '|';
+      i++;
+    } else if (s[i] === '|') {
+      cells.push(cur.trim());
+      cur = '';
+    } else cur += s[i];
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+
+/** A table starts at `i` when a row is followed by a delimiter row with as many columns. */
+function isTableStart(lines: string[], i: number) {
+  const head = lines[i];
+  const delim = lines[i + 1];
+  if (!head?.includes('|') || isSpecial(head) || delim === undefined || !TABLE_DELIM.test(delim)) return false;
+  return splitRow(head).length === splitRow(delim).length;
+}
+
+const isTableRow = (line: string) => line.trim() !== '' && line.includes('|') && !isSpecial(line);
+
+export function parseTable(src: string): { header: string[]; align: Align[]; rows: string[][] } {
+  const [head = '', delim = '', ...body] = src.split('\n');
+  const header = splitRow(head);
+  const align = splitRow(delim).map((c): Align => {
+    const l = c.startsWith(':');
+    const r = c.endsWith(':');
+    return l && r ? 'center' : r ? 'right' : l ? 'left' : null;
+  });
+  // GFM: rows are padded or truncated to the header's width.
+  const rows = body.map((l) => {
+    const cells = splitRow(l).slice(0, header.length);
+    while (cells.length < header.length) cells.push('');
+    return cells;
+  });
+  return { header, align, rows };
 }
 
 export function parse(src: string): Block[] {
@@ -60,6 +113,14 @@ export function parse(src: string): Block[] {
       while (i < lines.length && !FENCE.test(lines[i])) body.push(lines[i++]);
       i++; // closing fence
       blocks.push({ type: 'code', lang: m[1] ?? '', text: body.join('\n'), line: start });
+      continue;
+    }
+    if (isTableStart(lines, i)) {
+      const start = i;
+      const body = [lines[i].trim(), lines[i + 1].trim()];
+      i += 2;
+      while (i < lines.length && isTableRow(lines[i])) body.push(lines[i++].trim());
+      blocks.push({ type: 'table', text: body.join('\n'), line: start });
       continue;
     }
     if (RULE.test(line)) {
@@ -114,7 +175,9 @@ export function parse(src: string): Block[] {
     }
     const start = i;
     const body: string[] = [];
-    while (i < lines.length && lines[i].trim() && !isSpecial(lines[i])) body.push(lines[i++].trim());
+    // A table can interrupt a paragraph.
+    while (i < lines.length && lines[i].trim() && !isSpecial(lines[i]) && !(i > start && isTableStart(lines, i)))
+      body.push(lines[i++].trim());
     blocks.push({ type: 'paragraph', text: body.join(' '), line: start });
   }
   return blocks;
@@ -140,6 +203,8 @@ export function serializeBlock(b: Block): string {
         .join('\n');
     case 'code':
       return '```' + b.lang + '\n' + b.text + '\n```';
+    case 'table':
+      return b.text;
     case 'rule':
       return '---';
     case 'paragraph':
