@@ -200,11 +200,80 @@ describe('management API', () => {
     expect(((await (await call('/v1/audit', { method: 'GET', token: owner })).json()) as any).items).toHaveLength(3);
   });
 
+  it('stores the agent type, defaults it for older clients, and validates it', async () => {
+    const owner = await cognito('u1');
+    const create = (b: object) => call('/v1/agents', { method: 'POST', token: owner, body: JSON.stringify({ project_scope: '*', access_level: 'read_write', ...b }) });
+    const codex = (await (await create({ name: 'My Codex', agent_type: 'codex' })).json()) as any;
+    expect(codex.agent).toMatchObject({ name: 'My Codex', agent_type: 'codex' });
+    expect(((await (await create({ name: 'Old client' })).json()) as any).agent.agent_type).toBe('claude');
+    expect((await create({ name: 'x', agent_type: 'gemini' })).status).toBe(400);
+
+    const id = codex.agent.agent_id;
+    expect((await call(`/v1/agents/${id}`, { method: 'PATCH', token: owner, body: '{"agent_type":"claude"}' })).status).toBe(200);
+    expect((await call(`/v1/agents/${id}`, { method: 'PATCH', token: owner, body: '{"agent_type":"nope"}' })).status).toBe(400);
+    const list = (await (await call('/v1/agents', { method: 'GET', token: owner })).json()) as any;
+    expect(list.agents.find((a: any) => a.agent_id === id).agent_type).toBe('claude');
+  });
+
   it('validates input and requires a Cognito token', async () => {
     const owner = await cognito('u1');
     const bad = await call('/v1/agents', { method: 'POST', token: owner, body: JSON.stringify({ name: 'x', project_scope: 'Alpha', access_level: 'read_write' }) });
     expect(bad.status).toBe(400);
     expect((await call('/v1/agents', { method: 'GET', token: 'nope' })).status).toBe(401);
+  });
+
+  it('files API: user CRUD, conflicts, index protection, tenant isolation', async () => {
+    const owner = await cognito('u1');
+    const put = (path: string, b: unknown) => call(`/v1/file?path=${encodeURIComponent(path)}`, { method: 'PUT', token: owner, body: JSON.stringify(b) });
+
+    const created = await put('Alpha/notes/a.md', { content: '# A' });
+    expect(created.status).toBe(201);
+    const { file } = (await created.json()) as any;
+    expect((await put('Alpha/notes/a.md', { content: 'x' })).status).toBe(400); // no silent overwrite
+
+    const list = (await (await call('/v1/files', { method: 'GET', token: owner })).json()) as any;
+    expect(list.files.map((f: any) => f.path)).toEqual(['Alpha/index.md', 'Alpha/notes/a.md']);
+
+    const read = (await (await call('/v1/file?path=Alpha/notes/a.md', { method: 'GET', token: owner })).json()) as any;
+    expect(read).toMatchObject({ path: 'Alpha/notes/a.md', content: '# A', etag: file.etag });
+
+    expect((await put('Alpha/notes/a.md', { content: 'v2', overwrite: true, if_match: file.etag })).status).toBe(200);
+    expect((await put('Alpha/notes/a.md', { content: 'v3', overwrite: true, if_match: file.etag })).status).toBe(409); // stale etag
+    expect((await put('Alpha/index.md', { content: 'hack', overwrite: true })).status).toBe(400);
+    expect((await call('/v1/file?path=Alpha/index.md', { method: 'DELETE', token: owner })).status).toBe(400);
+    expect((await call('/v1/file?path=../u2/Alpha/a.md', { method: 'GET', token: owner })).status).toBe(400);
+
+    // An agent sees what the user wrote, and vice versa.
+    const { token } = await newAgent('u1', '*', 'read_write');
+    expect((await tool(token, 'read_file', { path: 'Alpha/notes/a.md' })).text).toBe('v2');
+
+    const other = await cognito('u2');
+    expect(((await (await call('/v1/files', { method: 'GET', token: other })).json()) as any).files).toEqual([]);
+    expect((await call('/v1/file?path=Alpha/notes/a.md', { method: 'GET', token: other })).status).toBe(404);
+
+    expect((await call('/v1/file?path=Alpha/notes/a.md', { method: 'DELETE', token: owner })).status).toBe(200);
+    expect(bucket.objects.has('u1/Alpha/index.md')).toBe(false);
+  });
+
+  it('files API: moves files and folders, deletes folders', async () => {
+    const owner = await cognito('u1');
+    const put = (path: string, content: string) => call(`/v1/file?path=${encodeURIComponent(path)}`, { method: 'PUT', token: owner, body: JSON.stringify({ content }) });
+    const move = (from: string, to: string) => call('/v1/files/move', { method: 'POST', token: owner, body: JSON.stringify({ from, to }) });
+    await put('Alpha/a.md', 'a');
+    await put('Alpha/sub/b.md', 'b');
+
+    expect((await move('Alpha/a.md', 'Alpha/sub/b.md')).status).toBe(400); // destination exists
+    expect((await move('Alpha/a.md', 'Alpha/renamed.md')).status).toBe(200);
+    expect((await move('Alpha', 'Alpha/sub')).status).toBe(400); // into itself
+    expect((await move('Alpha', 'Beta')).status).toBe(200);
+    expect([...bucket.objects.keys()].sort()).toEqual(['u1/Beta/index.md', 'u1/Beta/renamed.md', 'u1/Beta/sub/b.md']);
+    expect(bucket.objects.get('u1/Beta/index.md')!.body).toContain('[renamed.md](renamed.md)');
+
+    const del = await call('/v1/folder?path=Beta/sub', { method: 'DELETE', token: owner });
+    expect(((await del.json()) as any).deleted).toBe(1);
+    expect(bucket.objects.get('u1/Beta/index.md')!.body).not.toContain('sub/');
+    expect((await call('/v1/folder?path=Beta', { method: 'DELETE', token: owner })).status).toBe(200);
+    expect(bucket.objects.size).toBe(0);
   });
 
   it('reindex rebuilds a stale index', async () => {

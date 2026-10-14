@@ -25,6 +25,14 @@ export function scopeAllows(scope: string, project: string): boolean {
   return parseScope(scope).some((p) => p === '*' || p === `${project}/*`);
 }
 
+export const AGENT_TYPES = ['claude', 'codex'] as const;
+export type AgentType = (typeof AGENT_TYPES)[number];
+
+export function validateAgentType(type: unknown): AgentType {
+  if (!AGENT_TYPES.includes(type as AgentType)) throw new PathError(`agent_type must be one of: ${AGENT_TYPES.join(', ')}`);
+  return type as AgentType;
+}
+
 export function validateAccessLevel(level: unknown): AccessLevel {
   if (level !== 'read_only' && level !== 'read_write') {
     throw new PathError('access_level must be "read_only" or "read_write"');

@@ -2,10 +2,11 @@ import { signAgentToken } from '../auth/agentToken';
 import { cognitoConfigFromEnv, verifyCognitoToken } from '../auth/cognito';
 import { AuthError, nowSeconds } from '../auth/jwt';
 import { listAudit } from '../db/audit';
+import { handleFiles } from './files';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../db/permissions';
 import type { Env } from '../env';
 import { bearerToken } from '../mcp/server';
-import { validateAccessLevel, validateScope } from '../permissions/scope';
+import { validateAccessLevel, validateAgentType, validateScope } from '../permissions/scope';
 import { PathError, parseProject } from '../storage/paths';
 import { Store } from '../storage/store';
 
@@ -47,6 +48,9 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
     const path = url.pathname;
     const m = req.method;
 
+    const files = await handleFiles(req, env, url, userId);
+    if (files) return files;
+
     if (path === '/v1/agents' && m === 'GET') {
       const rows = await listAgents(env.DB, userId);
       return json({ agents: rows.map(({ user_id: _u, ...rest }) => rest) });
@@ -65,6 +69,8 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
         agent_id: crypto.randomUUID(),
         user_id: userId,
         name: validName(body.name),
+        // Optional for older clients: they only ever created Claude agents.
+        agent_type: body.agent_type === undefined ? 'claude' : validateAgentType(body.agent_type),
         project_scope: validateScope(body.project_scope),
         access_level: validateAccessLevel(body.access_level),
         created_at: new Date().toISOString(),
@@ -84,6 +90,7 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
         ...(body.project_scope !== undefined ? { project_scope: validateScope(body.project_scope) } : {}),
         ...(body.access_level !== undefined ? { access_level: validateAccessLevel(body.access_level) } : {}),
         ...(body.name !== undefined ? { name: validName(body.name) } : {}),
+        ...(body.agent_type !== undefined ? { agent_type: validateAgentType(body.agent_type) } : {}),
       };
       if (Object.keys(patch).length === 0) throw new PathError('Nothing to update');
       return (await updateAgent(env.DB, userId, agentMatch[1]!, patch)) ? json({ ok: true }) : json({ error: 'Not found' }, 404);

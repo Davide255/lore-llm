@@ -31,7 +31,7 @@ name = "lore-llm-dev"
 [env.dev.vars]
 COGNITO_REGION = "eu-north-1"
 COGNITO_USER_POOL_ID = "eu-north-1_orShbeG8H"
-COGNITO_CLIENT_IDS = "97beb3qgebbmbqrnr0erhs37v"
+COGNITO_CLIENT_IDS = "97beb3qgebbmbqrnr0erhs37v,2ij9dpmj7gacqj370obj0lehg2"
 ALLOWED_ORIGINS = ""
 [[env.dev.r2_buckets]]
 binding = "BUCKET"

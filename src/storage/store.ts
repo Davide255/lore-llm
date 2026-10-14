@@ -12,6 +12,18 @@ export interface FileInfo {
 
 export type WriteAction = 'CREATE' | 'UPDATE';
 
+/** A file as the user's own clients see it (management API), with the etag for optimistic concurrency. */
+export interface FileVersion {
+  /** Path inside the user's root: `Project/folder/file.md`. */
+  path: string;
+  size: number;
+  uploaded: string;
+  etag: string;
+}
+
+/** Thrown when an `ifMatch` precondition fails: someone else changed the file meanwhile. */
+export class ConflictError extends Error {}
+
 /** All R2 access for one deployment. Methods take `userId` and add the tenant prefix themselves. */
 export class Store {
   constructor(private bucket: R2Bucket) {}
@@ -41,6 +53,53 @@ export class Store {
     return objects
       .map((o) => ({ path: o.key.slice(base.length), size: o.size, uploaded: o.uploaded.toISOString() }))
       .sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  /** Every file of the user, across all projects. */
+  async listAllFiles(userId: string): Promise<FileVersion[]> {
+    const root = `${userId}/`;
+    const { objects } = await this.listAll(root);
+    return objects
+      .map((o) => ({ path: o.key.slice(root.length), size: o.size, uploaded: o.uploaded.toISOString(), etag: o.etag }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  /** Files under `Project/` or `Project/folder/` (used to move/delete whole folders). */
+  async listUnder(userId: string, relPrefix: string): Promise<FileVersion[]> {
+    const root = `${userId}/`;
+    const { objects } = await this.listAll(objectKey(userId, `${relPrefix}/`));
+    return objects.map((o) => ({ path: o.key.slice(root.length), size: o.size, uploaded: o.uploaded.toISOString(), etag: o.etag }));
+  }
+
+  async readVersion(userId: string, rel: string): Promise<(FileVersion & { content: string }) | null> {
+    const obj = await this.bucket.get(objectKey(userId, rel));
+    if (!obj) return null;
+    return { path: rel, size: obj.size, uploaded: obj.uploaded.toISOString(), etag: obj.etag, content: await obj.text() };
+  }
+
+  /**
+   * Write for the user's own clients. `ifMatch` makes the write conditional on
+   * the etag the client last saw, so an editor never silently clobbers an agent.
+   */
+  async save(
+    userId: string,
+    rel: string,
+    content: string,
+    opts: { overwrite: boolean; ifMatch?: string },
+  ): Promise<{ action: WriteAction; file: FileVersion }> {
+    assertSize(content);
+    const key = objectKey(userId, rel);
+    const exists = (await this.bucket.head(key)) !== null;
+    if (exists && !opts.overwrite) throw new PathError(`File already exists: ${rel}`);
+    const put = await this.bucket.put(key, content, {
+      httpMetadata: { contentType: 'text/markdown; charset=utf-8' },
+      ...(opts.ifMatch ? { onlyIf: { etagMatches: opts.ifMatch } } : {}),
+    });
+    if (!put) throw new ConflictError(`File was modified by someone else: ${rel}`);
+    return {
+      action: exists ? 'UPDATE' : 'CREATE',
+      file: { path: rel, size: put.size, uploaded: put.uploaded.toISOString(), etag: put.etag },
+    };
   }
 
   async read(userId: string, rel: string): Promise<string | null> {

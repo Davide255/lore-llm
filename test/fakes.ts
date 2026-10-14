@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import type { Env } from '../src/env';
 
 /** Minimal in-memory R2 with the subset of semantics the code relies on (etag preconditions, delimiter, cursor). */
@@ -55,7 +55,9 @@ export class FakeR2 {
 /** D1 look-alike over node:sqlite so the real SQL (and the real migration) is exercised. */
 export function makeFakeD1() {
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
+  // Every migration in order, like `wrangler d1 migrations apply`.
+  const dir = new URL('../migrations/', import.meta.url);
+  for (const f of readdirSync(dir).filter((n) => n.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(f, dir), 'utf8'));
   class Stmt {
     constructor(
       private sql: string,

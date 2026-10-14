@@ -1,9 +1,11 @@
 import type { AccessLevel } from '../env';
+import type { AgentType } from '../permissions/scope';
 
 export interface PermissionRow {
   agent_id: string;
   user_id: string;
   name: string;
+  agent_type: AgentType;
   project_scope: string;
   access_level: AccessLevel;
   created_at: string;
@@ -16,9 +18,9 @@ export async function getAgent(db: D1Database, agentId: string): Promise<Permiss
 export async function createAgent(db: D1Database, row: PermissionRow): Promise<void> {
   await db
     .prepare(
-      'INSERT INTO permissions (agent_id, user_id, name, project_scope, access_level, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO permissions (agent_id, user_id, name, agent_type, project_scope, access_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(row.agent_id, row.user_id, row.name, row.project_scope, row.access_level, row.created_at)
+    .bind(row.agent_id, row.user_id, row.name, row.agent_type, row.project_scope, row.access_level, row.created_at)
     .run();
 }
 
@@ -35,17 +37,18 @@ export async function updateAgent(
   db: D1Database,
   userId: string,
   agentId: string,
-  patch: { project_scope?: string; access_level?: AccessLevel; name?: string },
+  patch: { project_scope?: string; access_level?: AccessLevel; name?: string; agent_type?: AgentType },
 ): Promise<boolean> {
   const res = await db
     .prepare(
       `UPDATE permissions SET
          project_scope = COALESCE(?, project_scope),
          access_level  = COALESCE(?, access_level),
-         name          = COALESCE(?, name)
+         name          = COALESCE(?, name),
+         agent_type    = COALESCE(?, agent_type)
        WHERE agent_id = ? AND user_id = ?`,
     )
-    .bind(patch.project_scope ?? null, patch.access_level ?? null, patch.name ?? null, agentId, userId)
+    .bind(patch.project_scope ?? null, patch.access_level ?? null, patch.name ?? null, patch.agent_type ?? null, agentId, userId)
     .run();
   return (res.meta.changes ?? 0) > 0;
 }
