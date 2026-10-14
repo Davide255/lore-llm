@@ -1,0 +1,43 @@
+name = "lore-llm"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# Free plan: 100k requests/day, 10 ms CPU per request. Everything below is
+# I/O-bound (R2/D1) except JWT verification, which is a single RSA verify.
+workers_dev = true
+
+[vars]
+COGNITO_REGION = "eu-north-1"
+COGNITO_USER_POOL_ID = "REPLACE_ME"
+# Comma-separated list of app client ids allowed to call the management API
+COGNITO_CLIENT_IDS = "REPLACE_ME"
+# Comma-separated browser origins allowed on the management API (CORS + MCP Origin check)
+ALLOWED_ORIGINS = ""
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "lore-llm-kb"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lore-llm-db"
+database_id = "REPLACE_ME"
+migrations_dir = "migrations"
+
+# Secret (never in this file):  wrangler secret put AGENT_TOKEN_SECRET
+
+[env.dev]
+name = "lore-llm-dev"
+[env.dev.vars]
+COGNITO_REGION = "eu-north-1"
+COGNITO_USER_POOL_ID = "REPLACE_ME"
+COGNITO_CLIENT_IDS = "REPLACE_ME"
+ALLOWED_ORIGINS = ""
+[[env.dev.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "lore-llm-kb-dev"
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "lore-llm-db-dev"
+database_id = "REPLACE_ME"
+migrations_dir = "migrations"

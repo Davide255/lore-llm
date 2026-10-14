@@ -1,0 +1,22 @@
+{
+  "name": "lore-llm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lore LLM backend: multi-tenant markdown knowledge base exposed to AI agents through an MCP server on Cloudflare Workers",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply lore-llm-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply lore-llm-db --remote",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261006.1",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0",
+    "wrangler": "^4.0.0"
+  }
+}
