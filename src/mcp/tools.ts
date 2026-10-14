@@ -1,7 +1,8 @@
 import { insertAudit, type AuditAction } from '../db/audit';
+import { bumpVersion } from '../db/version';
 import type { AgentContext } from '../env';
 import { scopeAllows } from '../permissions/scope';
-import { PathError, parseFolder, parsePath, parseProject } from '../storage/paths';
+import { PathError, isMarkdown, parseFolder, parsePath, parseProject } from '../storage/paths';
 import type { Store } from '../storage/store';
 
 /** A failure the agent should see as a normal tool result (isError), not a protocol error. */
@@ -50,6 +51,8 @@ async function afterModification(
   rel: string,
 ): Promise<void> {
   await c.store.compileIndex(c.agent.userId, project);
+  // The user's clients poll this cursor to pick up the change.
+  await bumpVersion(c.db, c.agent.userId).catch((err) => console.error('version bump failed', String(err)));
   c.waitUntil(
     insertAudit(c.db, { userId: c.agent.userId, agentId: c.agent.agentId, action, targetPath: rel }).catch((err) =>
       console.error('audit insert failed', { agentId: c.agent.agentId, action, rel, err: String(err) }),
@@ -88,7 +91,9 @@ export const tools: ToolDef[] = [
     async run(args, c) {
       const project = parseProject(args.project);
       canRead(c.agent, project);
-      return JSON.stringify(await c.store.listFiles(c.agent.userId, project, parseFolder(args.folder)));
+      const files = await c.store.listFiles(c.agent.userId, project, parseFolder(args.folder));
+      // Images/PDFs the user attached are listed so links make sense, but they are not readable as text.
+      return JSON.stringify(files.map((f) => (isMarkdown(f.path) ? f : { ...f, attachment: true })));
     },
   },
   {
@@ -97,8 +102,9 @@ export const tools: ToolDef[] = [
     inputSchema: { type: 'object', properties: { path: pathProp }, required: ['path'], additionalProperties: false },
     annotations: { readOnlyHint: true },
     async run(args, c) {
-      const p = parsePath(args.path);
+      const p = parsePath(args.path, { attachments: true });
       canRead(c.agent, p.project);
+      if (p.kind === 'attachment') throw new ToolError(`${p.rel} is a binary attachment (${p.contentType}) and cannot be read as text.`);
       const content = await c.store.read(c.agent.userId, p.rel);
       if (content === null) throw new ToolError(`File not found: ${p.rel}`);
       return content;

@@ -31,6 +31,13 @@ describe('parsePath', () => {
     expect(parsePath('P/sub/index.md').isIndex).toBe(false);
   });
 
+  it('accepts attachments only when asked to', () => {
+    expect(() => parsePath('P/img/a.png')).toThrow(PathError);
+    expect(parsePath('P/img/a.PNG', { attachments: true })).toMatchObject({ kind: 'attachment', contentType: 'image/png', rel: 'P/img/a.PNG' });
+    expect(parsePath('P/a.md', { attachments: true })).toMatchObject({ kind: 'markdown' });
+    for (const bad of ['P/a.exe', 'P/.png', 'P/a', 'a.png']) expect(() => parsePath(bad, { attachments: true })).toThrow(PathError);
+  });
+
   it('only objectKey adds the tenant prefix', () => {
     expect(objectKey('u1', 'P/a.md')).toBe('u1/P/a.md');
   });

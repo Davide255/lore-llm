@@ -1,6 +1,7 @@
-import { PathError, objectKey } from './paths';
+import { MARKDOWN_TYPE, PathError, isMarkdown, objectKey } from './paths';
 
 export const MAX_FILE_BYTES = 1024 * 1024; // 1 MiB per markdown file
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MiB per attachment
 const APPEND_RETRIES = 4;
 
 export interface FileInfo {
@@ -55,13 +56,21 @@ export class Store {
       .sort((a, b) => a.path.localeCompare(b.path));
   }
 
-  /** Every file of the user, across all projects. */
-  async listAllFiles(userId: string): Promise<FileVersion[]> {
+  /**
+   * Every file of the user, across all projects. Attachments are listed only on
+   * request: older clients assume every listed file is a readable note.
+   */
+  async listAllFiles(userId: string, opts: { attachments?: boolean } = {}): Promise<FileVersion[]> {
     const root = `${userId}/`;
     const { objects } = await this.listAll(root);
     return objects
+      .filter((o) => opts.attachments || isMarkdown(o.key))
       .map((o) => ({ path: o.key.slice(root.length), size: o.size, uploaded: o.uploaded.toISOString(), etag: o.etag }))
       .sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  async exists(userId: string, rel: string): Promise<boolean> {
+    return (await this.bucket.head(objectKey(userId, rel))) !== null;
   }
 
   /** Files under `Project/` or `Project/folder/` (used to move/delete whole folders). */
@@ -92,7 +101,7 @@ export class Store {
     const exists = (await this.bucket.head(key)) !== null;
     if (exists && !opts.overwrite) throw new PathError(`File already exists: ${rel}`);
     const put = await this.bucket.put(key, content, {
-      httpMetadata: { contentType: 'text/markdown; charset=utf-8' },
+      httpMetadata: { contentType: MARKDOWN_TYPE },
       ...(opts.ifMatch ? { onlyIf: { etagMatches: opts.ifMatch } } : {}),
     });
     if (!put) throw new ConflictError(`File was modified by someone else: ${rel}`);
@@ -100,6 +109,42 @@ export class Store {
       action: exists ? 'UPDATE' : 'CREATE',
       file: { path: rel, size: put.size, uploaded: put.uploaded.toISOString(), etag: put.etag },
     };
+  }
+
+  /** Raw object for an attachment download (bytes, etag, size). */
+  async readBlob(userId: string, rel: string): Promise<R2ObjectBody | null> {
+    return this.bucket.get(objectKey(userId, rel));
+  }
+
+  /** Binary twin of `save`: same overwrite/ifMatch semantics. The content type comes from the path, never the client. */
+  async saveBlob(
+    userId: string,
+    rel: string,
+    bytes: ArrayBuffer,
+    contentType: string,
+    opts: { overwrite: boolean; ifMatch?: string },
+  ): Promise<{ action: WriteAction; file: FileVersion }> {
+    if (bytes.byteLength > MAX_ATTACHMENT_BYTES) throw new PathError(`File too large (max ${MAX_ATTACHMENT_BYTES} bytes)`);
+    const key = objectKey(userId, rel);
+    const exists = (await this.bucket.head(key)) !== null;
+    if (exists && !opts.overwrite) throw new PathError(`File already exists: ${rel}`);
+    const put = await this.bucket.put(key, bytes, {
+      httpMetadata: { contentType },
+      ...(opts.ifMatch ? { onlyIf: { etagMatches: opts.ifMatch } } : {}),
+    });
+    if (!put) throw new ConflictError(`File was modified by someone else: ${rel}`);
+    return {
+      action: exists ? 'UPDATE' : 'CREATE',
+      file: { path: rel, size: put.size, uploaded: put.uploaded.toISOString(), etag: put.etag },
+    };
+  }
+
+  /** Byte-exact copy (notes and attachments alike). Returns false when the source is gone. */
+  async copy(userId: string, src: string, dest: string, contentType: string): Promise<boolean> {
+    const obj = await this.bucket.get(objectKey(userId, src));
+    if (!obj) return false;
+    await this.bucket.put(objectKey(userId, dest), await obj.arrayBuffer(), { httpMetadata: { contentType } });
+    return true;
   }
 
   async read(userId: string, rel: string): Promise<string | null> {
@@ -112,7 +157,7 @@ export class Store {
     const key = objectKey(userId, rel);
     const exists = (await this.bucket.head(key)) !== null;
     if (exists && !overwrite) throw new PathError(`File already exists: ${rel} (set overwrite=true to replace it)`);
-    await this.bucket.put(key, content, { httpMetadata: { contentType: 'text/markdown; charset=utf-8' } });
+    await this.bucket.put(key, content, { httpMetadata: { contentType: MARKDOWN_TYPE } });
     return exists ? 'UPDATE' : 'CREATE';
   }
 
@@ -129,7 +174,7 @@ export class Store {
       const next = `${base}${sep}${addition}`;
       assertSize(next);
       const put = await this.bucket.put(key, next, {
-        httpMetadata: { contentType: 'text/markdown; charset=utf-8' },
+        httpMetadata: { contentType: MARKDOWN_TYPE },
         ...(current ? { onlyIf: { etagMatches: current.etag } } : {}),
       });
       if (put) return current ? 'UPDATE' : 'CREATE';
@@ -152,14 +197,15 @@ export class Store {
    * (last writer wins). `POST /v1/projects/:project/reindex` repairs that.
    */
   async compileIndex(userId: string, project: string): Promise<void> {
-    const files = (await this.listFiles(userId, project)).filter((f) => f.path.toLowerCase() !== 'index.md');
+    // Notes only: attachments are reached through the notes that embed them.
+    const files = (await this.listFiles(userId, project)).filter((f) => isMarkdown(f.path) && f.path.toLowerCase() !== 'index.md');
     const key = objectKey(userId, `${project}/index.md`);
     if (files.length === 0) {
       await this.bucket.delete(key);
       return;
     }
     await this.bucket.put(key, renderIndex(project, files), {
-      httpMetadata: { contentType: 'text/markdown; charset=utf-8' },
+      httpMetadata: { contentType: MARKDOWN_TYPE },
       customMetadata: { generated: 'true' },
     });
   }

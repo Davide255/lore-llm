@@ -1,16 +1,36 @@
+import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import type { Env } from '../src/env';
 
-/** Minimal in-memory R2 with the subset of semantics the code relies on (etag preconditions, delimiter, cursor). */
+/**
+ * Minimal in-memory R2 with the subset of semantics the code relies on (etag preconditions, delimiter, cursor).
+ * Bodies are bytes; like R2 single-part uploads, the etag is the MD5 of the body.
+ */
 export class FakeR2 {
-  objects = new Map<string, { body: string; etag: string; uploaded: Date; customMetadata?: Record<string, string> }>();
-  private n = 0;
+  objects = new Map<string, { bytes: Uint8Array; etag: string; uploaded: Date; contentType?: string; customMetadata?: Record<string, string> }>();
 
   private view(key: string) {
     const o = this.objects.get(key);
     if (!o) return null;
-    return { key, size: new TextEncoder().encode(o.body).byteLength, etag: o.etag, uploaded: o.uploaded, text: async () => o.body };
+    const bytes = o.bytes;
+    return {
+      key,
+      size: bytes.byteLength,
+      etag: o.etag,
+      uploaded: o.uploaded,
+      httpMetadata: { contentType: o.contentType },
+      text: async () => new TextDecoder().decode(bytes),
+      arrayBuffer: async () => bytes.slice().buffer,
+      get body() {
+        return new Blob([bytes]).stream();
+      },
+    };
+  }
+  /** Text of an object (tests). */
+  text(key: string): string | undefined {
+    const o = this.objects.get(key);
+    return o && new TextDecoder().decode(o.bytes);
   }
   async get(key: string) {
     return this.view(key);
@@ -18,11 +38,22 @@ export class FakeR2 {
   async head(key: string) {
     return this.view(key);
   }
-  async put(key: string, value: string, opts?: { onlyIf?: { etagMatches?: string }; customMetadata?: Record<string, string> }) {
+  async put(
+    key: string,
+    value: string | ArrayBuffer | Uint8Array,
+    opts?: { onlyIf?: { etagMatches?: string }; httpMetadata?: { contentType?: string }; customMetadata?: Record<string, string> },
+  ) {
     const cur = this.objects.get(key);
     if (opts?.onlyIf?.etagMatches !== undefined && cur?.etag !== opts.onlyIf.etagMatches) return null;
     await Promise.resolve(); // yield, so concurrent callers really interleave
-    this.objects.set(key, { body: value, etag: `e${++this.n}`, uploaded: new Date('2026-01-02T00:00:00Z'), customMetadata: opts?.customMetadata });
+    const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value instanceof Uint8Array ? value : value.slice(0));
+    this.objects.set(key, {
+      bytes,
+      etag: createHash('md5').update(bytes).digest('hex'),
+      uploaded: new Date('2026-01-02T00:00:00Z'),
+      contentType: opts?.httpMetadata?.contentType,
+      customMetadata: opts?.customMetadata,
+    });
     return this.view(key);
   }
   async delete(key: string) {

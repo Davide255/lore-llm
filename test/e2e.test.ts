@@ -267,21 +267,108 @@ describe('management API', () => {
     expect((await move('Alpha', 'Alpha/sub')).status).toBe(400); // into itself
     expect((await move('Alpha', 'Beta')).status).toBe(200);
     expect([...bucket.objects.keys()].sort()).toEqual(['u1/Beta/index.md', 'u1/Beta/renamed.md', 'u1/Beta/sub/b.md']);
-    expect(bucket.objects.get('u1/Beta/index.md')!.body).toContain('[renamed.md](renamed.md)');
+    expect(bucket.text('u1/Beta/index.md')).toContain('[renamed.md](renamed.md)');
 
     const del = await call('/v1/folder?path=Beta/sub', { method: 'DELETE', token: owner });
     expect(((await del.json()) as any).deleted).toBe(1);
-    expect(bucket.objects.get('u1/Beta/index.md')!.body).not.toContain('sub/');
+    expect(bucket.text('u1/Beta/index.md')).not.toContain('sub/');
     expect((await call('/v1/folder?path=Beta', { method: 'DELETE', token: owner })).status).toBe(200);
     expect(bucket.objects.size).toBe(0);
+  });
+
+  it('attachments: blob round-trip, conflicts, size limit, opt-in listing, index excludes them', async () => {
+    const owner = await cognito('u1');
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 255, 254]);
+    const putBlob = (path: string, bytes: Uint8Array, q = '', headers: Record<string, string> = {}) =>
+      worker.fetch(
+        new Request(`https://x.test/v1/blob?path=${encodeURIComponent(path)}${q}`, {
+          method: 'PUT',
+          headers: { authorization: `Bearer ${owner}`, ...headers },
+          body: bytes,
+        }),
+        env,
+        makeCtx().ctx,
+      );
+
+    await call('/v1/file?path=Alpha/a.md', { method: 'PUT', token: owner, body: JSON.stringify({ content: '![[pic.png]]' }) });
+    const created = await putBlob('Alpha/img/pic.png', png);
+    expect(created.status).toBe(201);
+    const { file } = (await created.json()) as any;
+    expect(bucket.objects.get('u1/Alpha/img/pic.png')!.contentType).toBe('image/png');
+
+    const got = await call('/v1/blob?path=Alpha/img/pic.png', { method: 'GET', token: owner });
+    expect(got.headers.get('content-type')).toBe('image/png');
+    expect(got.headers.get('x-lore-etag')).toBe(file.etag);
+    expect(new Uint8Array(await got.arrayBuffer())).toEqual(png);
+
+    expect((await putBlob('Alpha/img/pic.png', png)).status).toBe(400); // no silent overwrite
+    expect((await putBlob('Alpha/img/pic.png', new Uint8Array([1]), '&overwrite=1', { 'if-match': file.etag })).status).toBe(200);
+    expect((await putBlob('Alpha/img/pic.png', new Uint8Array([2]), '&overwrite=1', { 'if-match': file.etag })).status).toBe(409);
+    expect((await putBlob('Alpha/big.pdf', new Uint8Array(10 * 1024 * 1024 + 1))).status).toBe(400);
+    expect((await putBlob('Alpha/x.exe', png)).status).toBe(400);
+    expect((await putBlob('Alpha/a.md', png)).status).toBe(400); // notes go through /v1/file
+    expect((await call('/v1/file?path=Alpha/img/pic.png', { method: 'GET', token: owner })).status).toBe(400);
+
+    const plain = (await (await call('/v1/files', { method: 'GET', token: owner })).json()) as any;
+    expect(plain.files.map((f: any) => f.path)).toEqual(['Alpha/a.md', 'Alpha/index.md']);
+    const all = (await (await call('/v1/files?attachments=1', { method: 'GET', token: owner })).json()) as any;
+    expect(all.files.map((f: any) => f.path)).toEqual(['Alpha/a.md', 'Alpha/img/pic.png', 'Alpha/index.md']);
+    expect(bucket.text('u1/Alpha/index.md')).not.toContain('pic.png');
+
+    expect((await call('/v1/file?path=Alpha/img/pic.png', { method: 'DELETE', token: owner })).status).toBe(200);
+    expect(bucket.objects.has('u1/Alpha/img/pic.png')).toBe(false);
+  });
+
+  it('attachments: moves keep bytes and etag; agents cannot read or write them', async () => {
+    const owner = await cognito('u1');
+    const bytes = new Uint8Array(256).map((_, i) => i);
+    await call('/v1/file?path=Alpha/a.md', { method: 'PUT', token: owner, body: JSON.stringify({ content: 'a' }) });
+    await worker.fetch(
+      new Request('https://x.test/v1/blob?path=Alpha/img/p.png', { method: 'PUT', headers: { authorization: `Bearer ${owner}` }, body: bytes }),
+      env,
+      makeCtx().ctx,
+    );
+    const etag = bucket.objects.get('u1/Alpha/img/p.png')!.etag;
+    const move = (from: string, to: string) => call('/v1/files/move', { method: 'POST', token: owner, body: JSON.stringify({ from, to }) });
+
+    expect((await move('Alpha/img/p.png', 'Alpha/img/p.md')).status).toBe(400); // no type change
+    expect((await move('Alpha/img/p.png', 'Alpha/img/q.png')).status).toBe(200);
+    expect((await move('Alpha', 'Beta')).status).toBe(200);
+    const moved = bucket.objects.get('u1/Beta/img/q.png')!;
+    expect(moved.bytes).toEqual(bytes);
+    expect(moved.etag).toBe(etag);
+    expect(moved.contentType).toBe('image/png');
+
+    const { token } = await newAgent('u1', '*', 'read_write');
+    const files = JSON.parse((await tool(token, 'list_files', { project: 'Beta' })).text);
+    expect(files.find((f: any) => f.path === 'img/q.png').attachment).toBe(true);
+    const read = await tool(token, 'read_file', { path: 'Beta/img/q.png' });
+    expect(read.isError).toBe(true);
+    expect(read.text).toContain('binary attachment');
+    expect((await tool(token, 'write_file', { path: 'Beta/img/x.png', content: 'x' })).isError).toBe(true);
+    expect((await tool(token, 'delete_file', { path: 'Beta/img/q.png' })).isError).toBe(true);
+  });
+
+  it('change cursor: bumped by user writes and agent writes, per user', async () => {
+    const owner = await cognito('u1');
+    const version = async (t: string) => ((await (await call('/v1/version', { method: 'GET', token: t })).json()) as any).version;
+    expect(await version(owner)).toBe(0);
+    await call('/v1/file?path=Alpha/a.md', { method: 'PUT', token: owner, body: JSON.stringify({ content: 'a' }) });
+    expect(await version(owner)).toBe(1);
+    await call('/v1/file?path=Alpha/a.md', { method: 'PUT', token: owner, body: JSON.stringify({ content: 'dup' }) }); // 400: no bump
+    expect(await version(owner)).toBe(1);
+    const { token } = await newAgent('u1', '*', 'read_write');
+    await tool(token, 'write_file', { path: 'Alpha/b.md', content: 'b' });
+    expect(await version(owner)).toBe(2);
+    expect(await version(await cognito('u2'))).toBe(0);
   });
 
   it('reindex rebuilds a stale index', async () => {
     const owner = await cognito('u1');
     const { token } = await newAgent('u1', '*', 'read_write');
     await tool(token, 'write_file', { path: 'Alpha/a.md', content: 'x' });
-    bucket.objects.get('u1/Alpha/index.md')!.body = 'stale';
+    bucket.objects.get('u1/Alpha/index.md')!.bytes = new TextEncoder().encode('stale');
     expect((await call('/v1/projects/Alpha/reindex', { method: 'POST', token: owner })).status).toBe(200);
-    expect(bucket.objects.get('u1/Alpha/index.md')!.body).toContain('[a.md](a.md)');
+    expect(bucket.text('u1/Alpha/index.md')).toContain('[a.md](a.md)');
   });
 });

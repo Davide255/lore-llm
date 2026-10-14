@@ -11,7 +11,8 @@ AI agent ───Agent token───▶ /mcp   (MCP Streamable HTTP, stateless
 
 ## MCP tools
 `list_projects`, `list_files`, `read_file`, `write_file`, `append_file`, `delete_file` — all scoped to the agent's user and
-project scope; `<project>/index.md` is generated and read-only.
+project scope; `<project>/index.md` is generated and read-only. Attachments are listed (`attachment: true`) but
+cannot be read or written by agents.
 
 ## Management API (Cognito ID/access token)
 | Route | |
@@ -20,6 +21,11 @@ project scope; `<project>/index.md` is generated and read-only.
 | `GET /v1/agents` · `PATCH/DELETE /v1/agents/:id` | list · change permissions · revoke |
 | `GET /v1/audit?limit&before&agent_id&project` | agent activity timeline |
 | `POST /v1/projects/:p/reindex` | rebuild `index.md` |
+| `GET /v1/files[?attachments=1]` | every note (and attachment, on request) with its etag |
+| `GET/PUT /v1/file?path=` · `DELETE /v1/file?path=` | read/write a note (`{content, overwrite?, if_match?}`) · delete a note or attachment |
+| `GET/PUT /v1/blob?path=` | raw attachment bytes (png, jpg, gif, webp, svg, pdf; ≤ 10 MiB); `?overwrite=1`, `If-Match`, `x-lore-etag` |
+| `DELETE /v1/folder?path=` · `POST /v1/files/move` | delete a folder · move a file or folder (byte-exact) |
+| `GET /v1/version` | change cursor, bumped on every file change by anyone (clients poll it) |
 
 ## Develop
 ```bash

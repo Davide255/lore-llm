@@ -11,7 +11,8 @@ function corsHeaders(req: Request, env: Env): Record<string, string> {
   if (!origin || !allowed.includes(origin)) return {};
   return {
     'access-control-allow-origin': origin,
-    'access-control-allow-headers': 'authorization, content-type',
+    'access-control-allow-headers': 'authorization, content-type, if-match',
+    'access-control-expose-headers': 'x-lore-etag',
     'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     vary: 'Origin',
   };
