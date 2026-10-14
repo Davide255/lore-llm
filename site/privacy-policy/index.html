@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy · Lore LLM</title>
+  <meta name="description" content="How Lore LLM collects, uses and protects your data.">
+  <meta name="theme-color" content="#121211">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../legal.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="bar">
+      <a class="brand" href="../"><img src="../favicon.svg" alt="">Lore LLM</a>
+      <nav aria-label="Legal">
+        <a href="../privacy-policy/" aria-current="page">Privacy</a>
+        <a href="../terms-of-service/">Terms</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="kicker">Legal</div>
+    <h1>Privacy Policy</h1>
+    <p class="meta">Effective 14 October 2026</p>
+
+    <div class="summary">
+      <h2>In short</h2>
+      <ul>
+        <li>We store your account details from Google sign-in, your notes, and a log of what your AI agents change.</li>
+        <li>We don't sell your data, show ads, use analytics or tracking cookies, or train AI models on your content.</li>
+        <li>Content an agent reads is sent to that agent's provider (for example Anthropic or OpenAI). You choose which projects each agent can see.</li>
+        <li>You can ask us to export or delete your data at any time.</li>
+      </ul>
+    </div>
+
+    <h2>1. Who we are</h2>
+    <p>Lore LLM is operated by <strong>Davide Berardi</strong>, an individual developer based in Italy, who is the data controller for the personal data described here. Contact: <a href="mailto:davide.bera2021@gmail.com">davide.bera2021@gmail.com</a>.</p>
+    <p>This policy covers the hosted Lore LLM service (the server at the MCP and management API endpoints), the Lore LLM Desktop and Lore LLM Mobile apps, and this website. If you run your own instance of the server from the source code, the person running that instance is responsible for the data it holds.</p>
+
+    <h2>2. What we collect</h2>
+
+    <h3>Account information</h3>
+    <p>When you sign in with Google, we use Amazon Cognito to receive the information Google shares under the <code>openid</code>, <code>email</code> and <code>profile</code> scopes: your <strong>name, email address, Google account identifier</strong> and, if you have one, your profile picture. Cognito assigns you a user identifier that we use to keep your data separate from everyone else's. We never see your Google password.</p>
+
+    <h3>Your content</h3>
+    <p>The <strong>notes, folders and attachments</strong> (images and PDFs) that you or your agents create in the knowledge base, including file names and project names. We also store a generated <code>index.md</code> for each project.</p>
+
+    <h3>Agent records</h3>
+    <p>For each agent you connect: the <strong>name</strong> you give it, its type (for example Claude or Codex), the <strong>projects</strong> it may access, its <strong>access level</strong> (read-only or read-write) and when it was created. Agent tokens are shown to you once and are <strong>not stored</strong> by us.</p>
+
+    <h3>Activity log</h3>
+    <p>Each time an agent creates, updates or deletes a file we record the <strong>time, the agent, the action and the file path</strong>. This is what powers the activity feed in the apps. We also keep a per-account change counter so the apps know when to refresh.</p>
+
+    <h3>Technical data</h3>
+    <p>Like any web service, our infrastructure providers (Cloudflare and Amazon Web Services) process your <strong>IP address</strong> and request metadata to deliver requests, protect against abuse and keep short-lived operational logs. We don't build profiles from this data.</p>
+
+    <h3>Data that stays on your device</h3>
+    <ul>
+      <li><strong>Desktop:</strong> your local knowledge-base folder and the app's activity history stay on your computer. Sign-in tokens are encrypted with your operating system's secure storage. Using the desktop app without signing in sends nothing to us.</li>
+      <li><strong>Mobile:</strong> sign-in tokens are kept in the device keychain, and preferences such as appearance and recent searches are stored on the device.</li>
+    </ul>
+
+    <h2>3. How we use it</h2>
+    <ul>
+      <li>To provide the service: store and sync your knowledge base, let your agents read and write it, and show you their activity.</li>
+      <li>To authenticate you and enforce the permissions you give each agent.</li>
+      <li>To keep the service secure and working, and to investigate abuse.</li>
+      <li>To answer you when you contact us.</li>
+    </ul>
+    <p>We do <strong>not</strong> sell or rent personal data, use it for advertising, or use your content to train AI models.</p>
+
+    <h2>4. AI agents you connect</h2>
+    <p>When you create an agent token and add it to an AI tool, that tool can read and, if you allow it, change the files in the projects you selected. Everything the agent reads is sent to the company that runs that tool (for example Anthropic for Claude, or OpenAI for Codex) and is handled under <strong>that company's own terms and privacy policy</strong>, not this one. Only give agents access to projects you are comfortable sharing with their provider. You can narrow an agent's scope or revoke it at any time in the apps, and revocation takes effect immediately.</p>
+
+    <h2>5. Legal bases (GDPR)</h2>
+    <ul>
+      <li><strong>Performance of a contract</strong> (Art. 6(1)(b)): account data, content, agent records and the activity log are needed to provide the service you signed up for.</li>
+      <li><strong>Legitimate interests</strong> (Art. 6(1)(f)): technical data used to secure the service and prevent abuse.</li>
+      <li><strong>Legal obligations</strong> (Art. 6(1)(c)): where we must keep or disclose data by law.</li>
+    </ul>
+
+    <h2>6. Who processes your data</h2>
+    <div class="table">
+      <table>
+        <thead><tr><th>Provider</th><th>Purpose</th><th>Location</th></tr></thead>
+        <tbody>
+          <tr><td>Amazon Web Services (Cognito)</td><td>Sign-in and user accounts</td><td>EU (Stockholm, eu-north-1)</td></tr>
+          <tr><td>Google</td><td>Sign in with Google</td><td>Global</td></tr>
+          <tr><td>Cloudflare (Workers, R2, D1)</td><td>Running the server; storing notes, attachments, agent records and the activity log</td><td>Global network</td></tr>
+          <tr><td>GitHub (Pages)</td><td>Hosting this website</td><td>Global</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Some of these providers may process data outside the European Economic Area. Where they do, the transfer relies on the EU–US Data Privacy Framework or the European Commission's Standard Contractual Clauses, as set out in each provider's data processing terms.</p>
+
+    <h2>7. How long we keep it</h2>
+    <ul>
+      <li><strong>Account, content, agent records and activity log:</strong> for as long as your account exists. Files you delete are removed from storage straight away; there is no recycle bin on the server.</li>
+      <li><strong>Revoked agents:</strong> the agent's permission record is deleted when you revoke it. Entries it left in the activity log stay until your account is deleted.</li>
+      <li><strong>When you ask us to delete your account,</strong> we delete your account and all associated data within 30 days.</li>
+      <li><strong>Technical logs</strong> held by our providers are kept for the short periods described in their own policies.</li>
+    </ul>
+
+    <h2>8. Your rights</h2>
+    <p>Under the GDPR you can ask to <strong>access</strong>, <strong>correct</strong>, <strong>delete</strong> or <strong>export</strong> your data, and to <strong>restrict</strong> or <strong>object</strong> to how we process it. Email <a href="mailto:davide.bera2021@gmail.com">davide.bera2021@gmail.com</a> from the address on your account and we will reply within one month. Much of this you can also do yourself: the apps let you edit, export (copy or share) and delete your notes, and revoke agents.</p>
+    <p>If you think we have handled your data unlawfully, you can complain to the Italian data protection authority, the <a href="https://www.garanteprivacy.it/">Garante per la protezione dei dati personali</a>, or to the authority in the EU country where you live.</p>
+
+    <h2>9. Security</h2>
+    <p>All traffic is encrypted with TLS. Every stored file is keyed to the verified account it belongs to, so one account cannot reach another's data, and agents are limited to the projects and access level you set. Agent tokens expire (after 90 days by default) and are never stored on the server. No system is perfectly secure; if a breach affects your data we will notify you and the authorities as the law requires.</p>
+
+    <h2>10. Children</h2>
+    <p>Lore LLM is not intended for children under 14, and we do not knowingly collect their data. If you believe a child has given us personal data, contact us and we will delete it.</p>
+
+    <h2>11. Changes</h2>
+    <p>If we change this policy we will update the date at the top. For significant changes we will also tell you in the apps or by email before they take effect.</p>
+
+    <h2>12. Contact</h2>
+    <p>Davide Berardi, Italy · <a href="mailto:davide.bera2021@gmail.com">davide.bera2021@gmail.com</a></p>
+  </main>
+
+  <footer>
+    <div class="bar">
+      <span>© 2026 Davide Berardi</span>
+      <nav aria-label="Footer">
+        <a href="../">Home</a>
+        <a href="../terms-of-service/">Terms of Service</a>
+        <a href="https://github.com/Davide255/lore-llm">GitHub</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
