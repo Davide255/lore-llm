@@ -3,7 +3,7 @@ import { cognitoConfigFromEnv, verifyCognitoToken } from '../auth/cognito';
 import { AuthError, b64urlEncode, nowSeconds } from '../auth/jwt';
 import { createAgent, getAgent, listAgents } from '../db/permissions';
 import type { Env } from '../env';
-import { MAX_AGENTS_PER_USER, validateAccessLevel, validateAgentType, validateScope } from '../permissions/scope';
+import { MAX_AGENTS_PER_USER, validateAccessLevel } from '../permissions/scope';
 import { PathError } from '../storage/paths';
 
 const ACCESS_TOKEN_SECONDS = 3600;
@@ -47,7 +47,8 @@ const page = (html: string, status = 200, headers: HeadersInit = {}) =>
     },
   });
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-const errorPage = (message: string, status = 400) => page(`<!doctype html><meta charset="utf-8"><title>Lore LLM</title><p>${esc(message)}</p>`, status);
+const errorPage = (message: string, status = 400) =>
+  page(shell('Lore LLM', `<h1>Something went wrong</h1><p class="lead">${esc(message)}</p>`), status);
 
 function cookieValue(req: Request, name: string): string | null {
   for (const part of (req.headers.get('cookie') ?? '').split(';')) {
@@ -282,21 +283,46 @@ async function callback(req: Request, env: Env, url: URL): Promise<Response> {
   return page(consentHtml(client?.client_name ?? 'MCP client', new URL(row.redirect_uri).host, row.txn_id, csrf));
 }
 
+const LOGO =
+  '<svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f5cff"/><stop offset="1" stop-color="#3a86ff"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#g)"/><path d="M22 16v32h22" fill="none" stroke="#faf9f5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="44" cy="22" r="5" fill="#faf9f5"/></svg>';
+
+// Mirrors the site's dark theme (site/index.html). Inline only: the CSP allows no external assets.
+const STYLE = `:root{--purple:#8f5cff;--ink:#faf9f5;--ink2:rgba(250,249,245,.62);--ink3:rgba(250,249,245,.4);--hair:rgba(250,249,245,.1);--bg:#121211;--cell:#1c1b20;--cell2:#232129;--mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,Menlo,monospace}
+*{box-sizing:border-box}html{color-scheme:dark}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;background:radial-gradient(60rem 30rem at 50% -10%,rgba(143,92,255,.18),transparent 70%),var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"SF Pro Text","Segoe UI Variable Text","Segoe UI","Helvetica Neue",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em;margin-bottom:20px}.logo{width:28px;height:28px}
+.card{width:100%;max-width:30rem;background:var(--cell);border:1px solid var(--hair);border-radius:18px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+h1{margin:0 0 8px;font-size:24px;line-height:1.2;letter-spacing:-.02em}
+.lead{margin:0;color:var(--ink2)}.lead strong{color:var(--ink)}
+code{font-family:var(--mono);font-size:.88em;background:var(--cell2);border:1px solid var(--hair);border-radius:6px;padding:1px 6px}
+label{display:block;margin:18px 0 6px;font-size:14px;font-weight:600}
+input,select{width:100%;padding:11px 12px;font:inherit;color:var(--ink);background:var(--cell2);border:1px solid var(--hair);border-radius:10px;outline:none}
+input:focus,select:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(143,92,255,.28)}
+small{display:block;margin-top:6px;color:var(--ink3);font-size:13px}
+.row{display:flex;gap:12px;margin-top:26px}
+button{flex:1;padding:12px 16px;font:inherit;font-weight:600;color:var(--ink);background:rgba(250,249,245,.06);border:1px solid var(--hair);border-radius:12px;cursor:pointer}
+button:hover{background:rgba(250,249,245,.1)}
+button.primary{background:var(--purple);border-color:transparent;box-shadow:0 4px 14px rgba(143,92,255,.3)}
+button.primary:hover{background:#7a46f0}
+button:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+@media(max-width:480px){.card{padding:22px}.row{flex-direction:column-reverse}}`;
+
+const shell = (title: string, body: string) =>
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>${esc(title)}</title><style>${STYLE}</style></head><body><div class="brand">${LOGO}<span>Lore LLM</span></div><main class="card">${body}</main></body></html>`;
+
 function consentHtml(clientName: string, redirectHost: string, txn: string, csrf: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Authorize ${esc(clientName)}</title>
-<style>body{font:16px system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem}label{display:block;margin:1rem 0 .25rem;font-weight:600}
-input,select{width:100%;padding:.5rem;font:inherit;box-sizing:border-box}.row{display:flex;gap:.75rem;margin-top:1.5rem}button{flex:1;padding:.7rem;font:inherit;cursor:pointer}small{color:#666}</style></head>
-<body><h1>Authorize ${esc(clientName)}</h1>
-<p><strong>${esc(clientName)}</strong> (returns to <code>${esc(redirectHost)}</code>) wants to read and write your Lore LLM knowledge base. It will appear in your agents list and you can revoke it at any time.</p>
+  return shell(
+    `Authorize ${clientName}`,
+    `<h1>Authorize ${esc(clientName)}</h1>
+<p class="lead"><strong>${esc(clientName)}</strong> (returns to <code>${esc(redirectHost)}</code>) wants to read and write your knowledge base. It will appear in your agents list and you can revoke it at any time.</p>
 <form method="post" action="/oauth/consent">
 <input type="hidden" name="txn" value="${esc(txn)}"><input type="hidden" name="csrf" value="${esc(csrf)}">
 <label for="name">Agent name</label><input id="name" name="name" maxlength="64" required value="${esc(clientName)}">
-<label for="agent_type">Agent type</label><select id="agent_type" name="agent_type"><option value="claude">Claude</option><option value="codex">Codex</option></select>
-<label for="project_scope">Project scope</label><input id="project_scope" name="project_scope" required value="*"><small><code>*</code> for everything, or e.g. <code>Work/*,Notes/*</code></small>
 <label for="access_level">Access</label><select id="access_level" name="access_level"><option value="read_write">Read &amp; write</option><option value="read_only">Read only</option></select>
-<div class="row"><button type="submit" name="decision" value="deny">Deny</button><button type="submit" name="decision" value="allow">Allow</button></div>
-</form></body></html>`;
+<small>Which projects it can reach is managed later in the app.</small>
+<div class="row"><button type="submit" name="decision" value="deny">Deny</button><button class="primary" type="submit" name="decision" value="allow">Allow</button></div>
+</form>`,
+  );
 }
 
 // ---------- consent: mint the agent + authorization code ----------
@@ -320,8 +346,9 @@ async function consent(req: Request, env: Env, url: URL): Promise<Response> {
         agent_id: crypto.randomUUID(),
         user_id: row.user_id,
         name,
-        agent_type: validateAgentType(form.get('agent_type')),
-        project_scope: validateScope(form.get('project_scope')),
+        // Fine-grained scope and type are edited later in the app (PATCH /v1/agents/:id).
+        agent_type: 'claude' as const,
+        project_scope: '*',
         access_level: validateAccessLevel(form.get('access_level')),
         created_at: new Date().toISOString(),
       };

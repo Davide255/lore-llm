@@ -77,12 +77,12 @@ async function startFlow(clientId: string, challenge: string, extra: Record<stri
   return { txn, csrf, cookie, html };
 }
 
-async function fullFlow(opts: { scope?: string; level?: string } = {}) {
+async function fullFlow(opts: { level?: string } = {}) {
   const clientId = await registerClient();
   const { verifier, challenge } = await pkce();
   const { txn, csrf, cookie } = await startFlow(clientId, challenge);
   const consent = await req('/oauth/consent', {
-    ...form({ txn, csrf, decision: 'allow', name: 'My agent', agent_type: 'claude', project_scope: opts.scope ?? '*', access_level: opts.level ?? 'read_write' }),
+    ...form({ txn, csrf, decision: 'allow', name: 'My agent', access_level: opts.level ?? 'read_write' }),
     headers: { 'content-type': 'application/x-www-form-urlencoded', cookie },
   });
   expect(consent.status).toBe(302);
@@ -203,7 +203,7 @@ describe('consent', () => {
     const clientId = await registerClient();
     const { challenge } = await pkce();
     const { txn, csrf, cookie } = await startFlow(clientId, challenge);
-    const body = { txn, csrf, decision: 'allow', name: 'a', agent_type: 'claude', project_scope: '*', access_level: 'read_only' };
+    const body = { txn, csrf, decision: 'allow', name: 'a', access_level: 'read_only' };
     expect((await req('/oauth/consent', form(body))).status).toBe(403);
     const bad = await req('/oauth/consent', { ...form({ ...body, csrf: 'nope' }), headers: { 'content-type': 'application/x-www-form-urlencoded', cookie } });
     expect(bad.status).toBe(403);
@@ -222,19 +222,21 @@ describe('consent', () => {
     const clientId = await registerClient();
     const { challenge } = await pkce();
     const { txn, csrf, cookie } = await startFlow(clientId, challenge);
-    const init = { ...form({ txn, csrf, decision: 'allow', name: 'a', agent_type: 'claude', project_scope: '*', access_level: 'read_only' }), headers: { 'content-type': 'application/x-www-form-urlencoded', cookie } };
+    const init = { ...form({ txn, csrf, decision: 'allow', name: 'a', access_level: 'read_only' }), headers: { 'content-type': 'application/x-www-form-urlencoded', cookie } };
     expect((await req('/oauth/consent', init)).status).toBe(302);
     expect((await req('/oauth/consent', init)).status).toBe(403);
   });
 
-  it('rejects an invalid scope without burning the request', async () => {
+  it('rejects an invalid form without burning the request, and grants full scope by default', async () => {
     const clientId = await registerClient();
     const { challenge } = await pkce();
     const { txn, csrf, cookie } = await startFlow(clientId, challenge);
     const headers = { 'content-type': 'application/x-www-form-urlencoded', cookie };
-    const base = { txn, csrf, decision: 'allow', name: 'a', agent_type: 'claude', access_level: 'read_only' };
-    expect((await req('/oauth/consent', { ...form({ ...base, project_scope: '../x' }), headers })).status).toBe(400);
-    expect((await req('/oauth/consent', { ...form({ ...base, project_scope: '*' }), headers })).status).toBe(302);
+    const base = { txn, csrf, decision: 'allow', name: 'a' };
+    expect((await req('/oauth/consent', { ...form({ ...base, access_level: 'root' }), headers })).status).toBe(400);
+    expect((await req('/oauth/consent', { ...form({ ...base, access_level: 'read_only' }), headers })).status).toBe(302);
+    const row = (env.DB as any).raw.prepare('SELECT project_scope, agent_type, access_level FROM permissions').get();
+    expect({ ...row }).toEqual({ project_scope: '*', agent_type: 'claude', access_level: 'read_only' });
   });
 });
 
