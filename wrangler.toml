@@ -30,8 +30,8 @@ migrations_dir = "migrations"
 name = "lore-llm-dev"
 [env.dev.vars]
 COGNITO_REGION = "eu-north-1"
-COGNITO_USER_POOL_ID = "REPLACE_ME"
-COGNITO_CLIENT_IDS = "REPLACE_ME"
+COGNITO_USER_POOL_ID = "eu-north-1_orShbeG8H"
+COGNITO_CLIENT_IDS = "97beb3qgebbmbqrnr0erhs37v"
 ALLOWED_ORIGINS = ""
 [[env.dev.r2_buckets]]
 binding = "BUCKET"
@@ -39,5 +39,5 @@ bucket_name = "lore-llm-kb-dev"
 [[env.dev.d1_databases]]
 binding = "DB"
 database_name = "lore-llm-db-dev"
-database_id = "REPLACE_ME"
+database_id = "4e3764c3-0773-44ea-9ea0-f5f8b7816fca"
 migrations_dir = "migrations"
