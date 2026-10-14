@@ -1,6 +1,7 @@
 import { handleManagement } from './api/management';
 import type { Env } from './env';
 import { handleMcp } from './mcp/server';
+import { handleOAuth } from './oauth/oauth';
 
 function corsHeaders(req: Request, env: Env): Record<string, string> {
   const origin = req.headers.get('origin');
@@ -23,6 +24,9 @@ export default {
     const url = new URL(req.url);
 
     if (url.pathname === '/health') return new Response('ok');
+
+    const oauth = await handleOAuth(req, env, url);
+    if (oauth) return oauth;
 
     if (url.pathname === '/mcp') return handleMcp(req, env, ctx);
 

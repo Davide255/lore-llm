@@ -14,6 +14,19 @@ AI agent ───Agent token───▶ /mcp   (MCP Streamable HTTP, stateless
 project scope; `<project>/index.md` is generated and read-only. Attachments are listed (`attachment: true`) but
 cannot be read or written by agents.
 
+## OAuth for MCP clients
+Hosted connectors (Claude.ai, ChatGPT, `claude mcp add` without a header) authenticate via OAuth 2.1. The Worker is its own
+authorization server (discovery at `/.well-known/oauth-protected-resource` and `/oauth-authorization-server`, dynamic client
+registration at `/oauth/register`, `/oauth/authorize` + `/oauth/token`, PKCE S256 only). Login is delegated to the Cognito hosted
+UI; after sign-in the user picks name, scope and access level on a consent page, which creates a normal agent. Access tokens are
+the usual agent JWT (1 h), refresh tokens rotate (30 d, reuse revokes them), and revoking the agent kills both.
+Static agent tokens from `POST /v1/agents` keep working.
+
+Enable it (off by default, `/oauth/*` is 404 until both are set):
+1. In Cognito create a **public** app client (no secret, authorization-code grant, scope `openid`) with callback URL
+   `https://<worker>/oauth/callback`, and enable a hosted UI domain.
+2. Set `COGNITO_DOMAIN` (host only) and `OAUTH_COGNITO_CLIENT_ID` in `wrangler.toml`, then apply migration `0004_oauth.sql`.
+
 ## Management API (Cognito ID/access token)
 | Route | |
 |---|---|

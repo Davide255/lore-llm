@@ -61,6 +61,6 @@ Repeat without `--env dev` for prod (`lore-llm-kb`, `lore-llm-db`). Keep **separ
 ## 6. Open items not covered by the architecture document
 
 1. **File access for the mobile app/user.** The architecture only exposes an audit endpoint to the app. If users must browse/edit files from the app, a `/v1/files` REST layer reusing `Store` is needed (small: ~1 day).
-2. **MCP OAuth for hosted connectors.** Static bearer tokens work for clients that allow custom headers (Claude Code, API connectors, Cursor, etc.). Connector UIs that only support OAuth 2.1 discovery (verify per client) would need `/.well-known/oauth-*` + a token endpoint; Cognito can act as the authorization server. Decide if you need it.
+2. ~~**MCP OAuth for hosted connectors.**~~ Done: the Worker is its own authorization server with Cognito as login (see decisions §7 and README). Needs a Cognito public app client + hosted UI domain to be enabled.
 3. **Legacy SSE-only clients** (see decisions §1).
 4. **Search.** Agents can only list/read. Full-text/semantic search (Vectorize/AI Search) is the natural next feature.

@@ -6,11 +6,10 @@ import { handleFiles } from './files';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../db/permissions';
 import type { Env } from '../env';
 import { bearerToken } from '../mcp/server';
-import { validateAccessLevel, validateAgentType, validateScope } from '../permissions/scope';
+import { MAX_AGENTS_PER_USER, validateAccessLevel, validateAgentType, validateScope } from '../permissions/scope';
 import { PathError, parseProject } from '../storage/paths';
 import { Store } from '../storage/store';
 
-const MAX_AGENTS_PER_USER = 20;
 const DEFAULT_TOKEN_DAYS = 90;
 const MAX_TOKEN_DAYS = 365;
 

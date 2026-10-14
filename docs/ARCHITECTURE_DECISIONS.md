@@ -37,3 +37,14 @@ per the overview for latency; if auditing must be guaranteed, `await` the insert
 - `append_file` uses an etag precondition, so concurrent appends to `checklist.md` don't lose data.
 - **Not protected:** a `read_write` agent can delete any file in its scope and R2 has no versioning here. Backups/soft delete are in the plan (Phase 4).
 - Flat 1 MiB limit per file; only `.md` files.
+
+## 7. OAuth for /mcp: the Worker is the authorization server
+Hosted MCP connectors need OAuth 2.1 with dynamic client registration, which Cognito doesn't offer, and Cognito tokens carry
+no per-agent identity. So the Worker serves the OAuth endpoints itself and uses Cognito's hosted UI only to log the human in.
+Consent creates an ordinary `permissions` row and issues the existing agent JWT (1 h) plus a rotating refresh token, so
+tool authorization and revocation (delete the row) are unchanged; `deleteAgent` also drops refresh tokens and codes.
+Codes and refresh tokens are stored hashed; codes are single use (60 s); a replayed code or refresh token revokes the agent's
+refresh tokens. Only public clients with S256 PKCE and exact-match https/loopback redirect URIs are accepted. The consent
+form is protected by an HttpOnly cookie plus a CSRF token. Static agent tokens remain supported. OAuth stays off until
+`COGNITO_DOMAIN` and `OAUTH_COGNITO_CLIENT_ID` are set. Limits: the client registry is capped (5000) rather than rate limited,
+and expired rows are purged opportunistically on `/authorize`.

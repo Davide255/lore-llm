@@ -2,6 +2,7 @@ import { AuthError } from '../auth/jwt';
 import { verifyAgentToken } from '../auth/agentToken';
 import { getAgent } from '../db/permissions';
 import type { AgentContext, Env } from '../env';
+import { oauthEnabled, protectedResourceMetadataUrl } from '../oauth/oauth';
 import { Store } from '../storage/store';
 import { callTool, toolDescriptors } from './tools';
 
@@ -61,7 +62,10 @@ export async function handleMcp(req: Request, env: Env, ctx: ExecutionContext): 
     agent = await authenticateAgent(req, env);
   } catch (err) {
     if (err instanceof AuthError) {
-      return json({ error: err.message }, err.status, { 'www-authenticate': 'Bearer realm="lore-llm"' });
+      const challenge = oauthEnabled(env)
+        ? `Bearer realm="lore-llm", resource_metadata="${protectedResourceMetadataUrl(new URL(req.url).origin)}"`
+        : 'Bearer realm="lore-llm"';
+      return json({ error: err.message }, err.status, { 'www-authenticate': challenge });
     }
     throw err;
   }

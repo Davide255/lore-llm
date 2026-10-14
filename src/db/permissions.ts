@@ -55,5 +55,9 @@ export async function updateAgent(
 
 export async function deleteAgent(db: D1Database, userId: string, agentId: string): Promise<boolean> {
   const res = await db.prepare('DELETE FROM permissions WHERE agent_id = ? AND user_id = ?').bind(agentId, userId).run();
-  return (res.meta.changes ?? 0) > 0;
+  if ((res.meta.changes ?? 0) === 0) return false;
+  // Access tokens die with the row; OAuth refresh tokens and codes must not outlive the agent.
+  await db.prepare('DELETE FROM oauth_refresh_tokens WHERE agent_id = ?').bind(agentId).run();
+  await db.prepare('DELETE FROM oauth_codes WHERE agent_id = ?').bind(agentId).run();
+  return true;
 }

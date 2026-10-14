@@ -25,6 +25,8 @@ export function scopeAllows(scope: string, project: string): boolean {
   return parseScope(scope).some((p) => p === '*' || p === `${project}/*`);
 }
 
+export const MAX_AGENTS_PER_USER = 20;
+
 export const AGENT_TYPES = ['claude', 'codex'] as const;
 export type AgentType = (typeof AGENT_TYPES)[number];
 
