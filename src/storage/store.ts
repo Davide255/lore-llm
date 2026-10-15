@@ -3,6 +3,8 @@ import { MARKDOWN_TYPE, PathError, isMarkdown, objectKey } from './paths';
 export const MAX_FILE_BYTES = 1024 * 1024; // 1 MiB per markdown file
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MiB per attachment
 const APPEND_RETRIES = 4;
+/** R2 calls per request are limited; whole-project operations stay below this many files. */
+export const MAX_BATCH = 100;
 
 export interface FileInfo {
   /** Project-relative path. */
@@ -180,6 +182,56 @@ export class Store {
       if (put) return current ? 'UPDATE' : 'CREATE';
     }
     throw new Error('Concurrent modification, please retry');
+  }
+
+  /**
+   * Atomic read-modify-write of an existing file, guarded by its etag.
+   * `fn` may throw to abort. Returns false when the file does not exist.
+   */
+  async modify(userId: string, rel: string, fn: (content: string) => string): Promise<boolean> {
+    const key = objectKey(userId, rel);
+    for (let i = 0; i < APPEND_RETRIES; i++) {
+      const current = await this.bucket.get(key);
+      if (!current) return false;
+      const next = fn(await current.text());
+      assertSize(next);
+      const put = await this.bucket.put(key, next, {
+        httpMetadata: { contentType: MARKDOWN_TYPE },
+        onlyIf: { etagMatches: current.etag },
+      });
+      if (put) return true;
+    }
+    throw new Error('Concurrent modification, please retry');
+  }
+
+  /** Deletes every file of the project (notes, attachments, index). Returns how many were removed. */
+  async deleteProject(userId: string, project: string): Promise<number> {
+    const files = await this.listUnder(userId, project);
+    if (files.length > MAX_BATCH) throw new PathError(`Project too large (max ${MAX_BATCH} files)`);
+    for (const f of files) await this.bucket.delete(objectKey(userId, f.path));
+    return files.length;
+  }
+
+  /**
+   * R2 has no rename: copy every file under the new prefix, then delete the old ones.
+   * The generated index stays behind and is rebuilt for the new name.
+   */
+  async renameProject(userId: string, from: string, to: string): Promise<number> {
+    const files = (await this.listUnder(userId, from)).filter((f) => f.path.toLowerCase() !== `${from}/index.md`.toLowerCase());
+    if (files.length === 0) throw new PathError(`Project not found: ${from}`);
+    if (files.length > MAX_BATCH) throw new PathError(`Project too large (max ${MAX_BATCH} files)`);
+    if ((await this.listUnder(userId, to)).length > 0) throw new PathError(`Project already exists: ${to}`);
+    for (const f of files) {
+      const obj = await this.bucket.get(objectKey(userId, f.path));
+      if (!obj) continue;
+      await this.bucket.put(objectKey(userId, `${to}${f.path.slice(from.length)}`), await obj.arrayBuffer(), {
+        httpMetadata: { contentType: obj.httpMetadata?.contentType },
+      });
+    }
+    for (const f of files) await this.bucket.delete(objectKey(userId, f.path));
+    await this.bucket.delete(objectKey(userId, `${from}/index.md`));
+    await this.compileIndex(userId, to);
+    return files.length;
   }
 
   async delete(userId: string, rel: string): Promise<boolean> {
