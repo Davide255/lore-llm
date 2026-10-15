@@ -10,9 +10,12 @@ AI agent ───Agent token───▶ /mcp   (MCP Streamable HTTP, stateless
 ```
 
 ## MCP tools
-`list_projects`, `list_files`, `read_file`, `write_file`, `append_file`, `delete_file` — all scoped to the agent's user and
-project scope; `<project>/index.md` is generated and read-only. Attachments are listed (`attachment: true`) but
-cannot be read or written by agents.
+- Files: `list_projects`, `list_files`, `read_file`, `read_file_lines`, `search_files`, `write_file`, `append_file`, `patch_file`, `delete_file`
+- Checklists (`<project>/checklist.md`): `get_checklist`, `add_checklist_item`, `check_item`, `edit_checklist_item`, `move_checklist_item`, `delete_checklist_item`
+- Projects: `create_project`, `rename_project` (moves all files; max 100), `delete_project` (needs `confirm=true`)
+
+All are scoped to the agent's user and project scope (write tools need `read_write`; renaming needs access to both names);
+`<project>/index.md` is generated and read-only. Attachments are listed (`attachment: true`) but cannot be read or written by agents.
 
 ## OAuth for MCP clients
 Hosted connectors (Claude.ai, ChatGPT, `claude mcp add` without a header) authenticate via OAuth 2.1. The Worker is its own

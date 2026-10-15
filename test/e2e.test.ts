@@ -77,6 +77,9 @@ describe('MCP protocol', () => {
     const list = await mcp(token, 'tools/list');
     expect(list.body.result.tools.map((t: any) => t.name)).toEqual([
       'list_projects', 'list_files', 'read_file', 'write_file', 'append_file', 'delete_file',
+      'read_file_lines', 'search_files', 'patch_file',
+      'get_checklist', 'add_checklist_item', 'check_item', 'edit_checklist_item', 'delete_checklist_item', 'move_checklist_item',
+      'create_project', 'rename_project', 'delete_project',
     ]);
     expect((await mcp(token, 'nope')).body.error.code).toBe(-32601);
   });
@@ -96,6 +99,71 @@ describe('MCP protocol', () => {
       ctx,
     );
     expect(res.status).toBe(403);
+  });
+});
+
+describe('lines, search and patch tools', () => {
+  it('reads line ranges, searches and patches', async () => {
+    const { token } = await newAgent('u1', '*', 'read_write');
+    await tool(token, 'write_file', { path: 'Alpha/a.md', content: 'one\ntwo\nthree' });
+    expect((await tool(token, 'read_file_lines', { path: 'Alpha/a.md', startLine: 2, endLine: 3 })).text).toContain('2: two\n3: three');
+    expect((await tool(token, 'read_file_lines', { path: 'Alpha/a.md', startLine: 9 })).isError).toBe(true);
+    expect(JSON.parse((await tool(token, 'search_files', { query: 'TWO' })).text)[0].path).toBe('Alpha/a.md');
+    expect((await tool(token, 'search_files', { query: 'zzz' })).text).toContain('No results');
+    await tool(token, 'patch_file', { path: 'Alpha/a.md', startLine: 2, endLine: 2, newContent: 'x\ny' });
+    expect((await tool(token, 'read_file', { path: 'Alpha/a.md' })).text).toBe('one\nx\ny\nthree');
+    expect((await tool(token, 'patch_file', { path: 'Alpha/index.md', startLine: 1, endLine: 1, newContent: 'h' })).isError).toBe(true);
+    expect((await tool(token, 'patch_file', { path: 'Alpha/none.md', startLine: 1, endLine: 1, newContent: 'h' })).isError).toBe(true);
+  });
+});
+
+describe('checklist tools', () => {
+  it('adds, checks, edits, moves and deletes items', async () => {
+    const { token } = await newAgent('u1', '*', 'read_write');
+    expect((await tool(token, 'get_checklist', { project: 'Alpha' })).isError).toBe(true);
+    await tool(token, 'add_checklist_item', { project: 'Alpha', item: 'Login page', version: 'v1.0.0' });
+    await tool(token, 'add_checklist_item', { project: 'Alpha', item: 'Logout', version: 'v1.0.0' });
+    await tool(token, 'check_item', { project: 'Alpha', item: 'login' });
+    expect((await tool(token, 'get_checklist', { project: 'Alpha' })).text).toContain('1/2 completed');
+    await tool(token, 'edit_checklist_item', { project: 'Alpha', item: 'logout', newText: 'Sign out' });
+    await tool(token, 'move_checklist_item', { project: 'Alpha', item: 'sign out', fromVersion: 'v1.0.0', toVersion: 'v1.1.0' });
+    const text = (await tool(token, 'get_checklist', { project: 'Alpha' })).text;
+    expect(text).toContain('## v1.1.0\n\n- [ ] Sign out');
+    expect(text).toContain('- [x] Login page');
+    expect((await tool(token, 'check_item', { project: 'Alpha', item: 'nothing' })).isError).toBe(true);
+    await tool(token, 'delete_checklist_item', { project: 'Alpha', item: 'sign out' });
+    expect((await tool(token, 'get_checklist', { project: 'Alpha' })).text).not.toContain('Sign out');
+    expect((await tool(token, 'add_checklist_item', { project: 'Alpha', item: 'a\nb' })).isError).toBe(true);
+  });
+});
+
+describe('project tools', () => {
+  it('creates, renames and deletes projects', async () => {
+    const { token } = await newAgent('u1', '*', 'read_write');
+    expect((await tool(token, 'create_project', { project: 'Alpha' })).text).toBe('Created project Alpha');
+    expect((await tool(token, 'create_project', { project: 'Alpha' })).isError).toBe(true);
+    await tool(token, 'write_file', { path: 'Alpha/sub/a.md', content: 'hi' });
+    await tool(token, 'create_project', { project: 'Taken' });
+    expect((await tool(token, 'rename_project', { project: 'Alpha', newName: 'Taken' })).isError).toBe(true);
+    expect((await tool(token, 'rename_project', { project: 'Alpha', newName: 'Beta' })).isError).toBe(false);
+    expect(JSON.parse((await tool(token, 'list_projects', {})).text)).toEqual(['Beta', 'Taken']);
+    expect((await tool(token, 'read_file', { path: 'Beta/sub/a.md' })).text).toBe('hi');
+    expect((await tool(token, 'read_file', { path: 'Beta/index.md' })).text).toContain('sub/');
+    expect((await tool(token, 'delete_project', { project: 'Beta' })).isError).toBe(true); // needs confirm
+    expect((await tool(token, 'delete_project', { project: 'Beta', confirm: true })).isError).toBe(false);
+    expect((await tool(token, 'delete_project', { project: 'Beta', confirm: true })).isError).toBe(true);
+    expect(JSON.parse((await tool(token, 'list_projects', {})).text)).toEqual(['Taken']);
+  });
+
+  it('respects scope and read-only agents', async () => {
+    const scoped = await newAgent('u1', 'Alpha/*', 'read_write');
+    expect((await tool(scoped.token, 'create_project', { project: 'Alpha' })).isError).toBe(false);
+    expect((await tool(scoped.token, 'create_project', { project: 'Other' })).isError).toBe(true);
+    expect((await tool(scoped.token, 'rename_project', { project: 'Alpha', newName: 'Other' })).isError).toBe(true);
+    const ro = await newAgent('u1', '*', 'read_only');
+    for (const [n, a] of [['create_project', { project: 'Z' }], ['rename_project', { project: 'Alpha', newName: 'Z' }], ['delete_project', { project: 'Alpha', confirm: true }], ['patch_file', { path: 'Alpha/a.md', startLine: 1, endLine: 1, newContent: 'x' }], ['add_checklist_item', { project: 'Alpha', item: 'x' }]] as const) {
+      expect((await tool(ro.token, n, a)).isError).toBe(true);
+    }
   });
 });
 
