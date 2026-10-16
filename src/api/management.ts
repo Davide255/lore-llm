@@ -1,6 +1,8 @@
 import { signAgentToken } from '../auth/agentToken';
+import { adminDeleteUser } from '../auth/cognitoAdmin';
 import { cognitoConfigFromEnv, verifyCognitoToken } from '../auth/cognito';
 import { AuthError, nowSeconds } from '../auth/jwt';
+import { deleteUserRows } from '../db/account';
 import { listAudit } from '../db/audit';
 import { handleFiles } from './files';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../db/permissions';
@@ -49,6 +51,27 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
 
     const files = await handleFiles(req, env, url, userId);
     if (files) return files;
+
+    // Account deletion (App Store 5.1.1(v)): wipe the user's data, then their identity. Retrying is safe.
+    if (path === '/v1/account' && m === 'DELETE') {
+      await deleteUserRows(env.DB, userId);
+      await new Store(env.BUCKET).deleteAll(userId);
+      let identityDeleted = false;
+      if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
+        const cfg = cognitoConfigFromEnv(env);
+        try {
+          await adminDeleteUser(
+            { region: cfg.region, userPoolId: cfg.userPoolId, accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY },
+            userId,
+          );
+          identityDeleted = true;
+        } catch (err) {
+          console.error('cognito delete failed', String(err));
+          return json({ error: 'Could not delete the sign-in identity, try again' }, 502);
+        }
+      }
+      return json({ ok: true, identity_deleted: identityDeleted });
+    }
 
     if (path === '/v1/agents' && m === 'GET') {
       const rows = await listAgents(env.DB, userId);

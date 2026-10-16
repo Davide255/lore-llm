@@ -41,6 +41,7 @@ Enable it (off by default, `/oauth/*` is 404 until both are set):
 | `GET/PUT /v1/file?path=` · `DELETE /v1/file?path=` | read/write a note (`{content, overwrite?, if_match?}`) · delete a note or attachment |
 | `GET/PUT /v1/blob?path=` | raw attachment bytes (png, jpg, gif, webp, svg, pdf; ≤ 10 MiB); `?overwrite=1`, `If-Match`, `x-lore-etag` |
 | `DELETE /v1/folder?path=` · `POST /v1/files/move` | delete a folder · move a file or folder (byte-exact) |
+| `DELETE /v1/account` | permanently delete the caller's files, agents, audit log and (if `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` secrets allow `cognito-idp:AdminDeleteUser`) their Cognito user |
 | `GET /v1/version` | change cursor, bumped on every file change by anyone (clients poll it) |
 
 ## Develop

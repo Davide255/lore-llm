@@ -71,6 +71,15 @@ export class Store {
       .sort((a, b) => a.path.localeCompare(b.path));
   }
 
+  /** Permanently removes every object of the user (notes and attachments). Returns how many. */
+  async deleteAll(userId: string): Promise<number> {
+    const { objects } = await this.listAll(`${userId}/`);
+    const keys = objects.map((o) => o.key);
+    // One R2 call per 1000 keys, to stay well under the per-request subrequest limit.
+    for (let i = 0; i < keys.length; i += 1000) await this.bucket.delete(keys.slice(i, i + 1000));
+    return keys.length;
+  }
+
   async exists(userId: string, rel: string): Promise<boolean> {
     return (await this.bucket.head(objectKey(userId, rel))) !== null;
   }

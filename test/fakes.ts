@@ -56,8 +56,8 @@ export class FakeR2 {
     });
     return this.view(key);
   }
-  async delete(key: string) {
-    this.objects.delete(key);
+  async delete(key: string | string[]) {
+    for (const k of Array.isArray(key) ? key : [key]) this.objects.delete(k);
   }
   async list(opts: { prefix?: string; delimiter?: string; cursor?: string; limit?: number }) {
     const prefix = opts.prefix ?? '';
