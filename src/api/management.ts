@@ -4,6 +4,7 @@ import { AuthError, nowSeconds } from '../auth/jwt';
 import { listAudit } from '../db/audit';
 import { upsertUser } from '../db/users';
 import { handleFiles } from './files';
+import { handleTeams } from './teams';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../db/permissions';
 import type { Env } from '../env';
 import { bearerToken } from '../mcp/server';
@@ -53,6 +54,9 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
 
     const files = await handleFiles(req, env, url, userId);
     if (files) return files;
+
+    const teams = await handleTeams(req, env, url, userId);
+    if (teams) return teams;
 
     if (path === '/v1/agents' && m === 'GET') {
       const rows = await listAgents(env.DB, userId);

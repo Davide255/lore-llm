@@ -1,7 +1,8 @@
-import { bumpVersion, getVersion } from '../db/version';
+import { listUserTeams } from '../db/teams';
+import { bumpVersion, getVersion, getVersions } from '../db/version';
 import type { Env } from '../env';
 import { canRead, canWrite, resolveAccess } from '../permissions/access';
-import { userOwner, type Owner } from '../storage/owner';
+import { parseOwner, teamOwner, userOwner, type Owner } from '../storage/owner';
 import { PathError, isStorableFile, parseFolder, parsePath, parseProject } from '../storage/paths';
 import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
 
@@ -10,8 +11,13 @@ import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
  * the human's Cognito token. Same tenant prefix and path rules as the MCP tools;
  * writes are not audited (the audit log tracks agents).
  *
- *   GET    /v1/files[?attachments=1]      every note of the user (path, size, uploaded, etag); attachments on request
- *   GET    /v1/version                    {version}: bumped on every change to the user's files, by anyone
+ * Every route takes an optional `?owner=t:<teamId>` to act on a team's files
+ * (default: the caller's own). The caller's role on that owner decides: viewers
+ * read, editors and owners write; anyone else gets 403.
+ *
+ *   GET    /v1/files[?attachments=1]      every note of the owner (path, size, uploaded, etag); attachments on request
+ *   GET    /v1/version                    {version, updated_at, scopes}: bumped on every change to the owner's files, by anyone;
+ *                                         without ?owner, `scopes` holds the cursors of the caller's teams, keyed `t:<teamId>`
  *   GET    /v1/file?path=P/a.md           content + metadata
  *   PUT    /v1/file?path=P/a.md           {content, overwrite?, if_match?}
  *   DELETE /v1/file?path=P/a.md           a note or an attachment
@@ -51,10 +57,22 @@ async function body(req: Request): Promise<Record<string, unknown>> {
   throw new PathError('Body must be a JSON object');
 }
 
+/** The owner a request acts on: `?owner=t:<teamId>` or, by default, the caller's own space. */
+function requestOwner(url: URL, userId: string): Owner {
+  const raw = url.searchParams.get('owner');
+  if (raw === null) return userOwner(userId);
+  try {
+    const parsed = parseOwner(raw);
+    return parsed.kind === 'team' ? teamOwner(parsed.id) : userOwner(parsed.id);
+  } catch {
+    throw new PathError('Invalid owner');
+  }
+}
+
 /** Returns null when the route is not a files route. */
 export async function handleFiles(req: Request, env: Env, url: URL, userId: string): Promise<Response | null> {
   try {
-    const owner = userOwner(userId);
+    const owner = requestOwner(url, userId);
     const res = await route(req, env, url, userId, owner);
     // Any successful change moves the owner's change cursor.
     // The write already happened: a failed bump must not turn it into an error.
@@ -83,7 +101,10 @@ async function route(req: Request, env: Env, url: URL, userId: string, owner: Ow
   }
 
   if (path === '/v1/version' && m === 'GET') {
-    return json(await getVersion(env.DB, owner));
+    const own = await getVersion(env.DB, owner);
+    if (url.searchParams.has('owner')) return json(own);
+    const teams = await listUserTeams(env.DB, userId);
+    return json({ ...own, scopes: await getVersions(env.DB, teams.map((t) => teamOwner(t.id))) });
   }
 
   if (path === '/v1/file') {

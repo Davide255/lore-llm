@@ -23,3 +23,16 @@ export async function getVersion(db: D1Database, owner: Owner): Promise<{ versio
     .first<{ version: number; updated_at: string }>();
   return row ?? { version: 0, updated_at: null };
 }
+
+/** Cursors of several owners at once (a user's personal space plus their teams). Owners never changed report version 0. */
+export async function getVersions(db: D1Database, owners: Owner[]): Promise<Record<string, { version: number; updated_at: string | null }>> {
+  const out: Record<string, { version: number; updated_at: string | null }> = {};
+  for (const o of owners) out[o] = { version: 0, updated_at: null };
+  if (owners.length === 0) return out;
+  const res = await db
+    .prepare(`SELECT user_id, version, updated_at FROM space_versions WHERE user_id IN (${owners.map(() => '?').join(',')})`)
+    .bind(...owners)
+    .all<{ user_id: string; version: number; updated_at: string }>();
+  for (const r of res.results) out[r.user_id] = { version: r.version, updated_at: r.updated_at };
+  return out;
+}

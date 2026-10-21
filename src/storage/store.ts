@@ -235,6 +235,27 @@ export class Store {
     return files.length;
   }
 
+  /**
+   * Moves a whole project from one owner to another (a personal space into a team).
+   * R2 has no rename: copy every file, then delete the originals. The generated index
+   * stays behind and is rebuilt for the destination.
+   */
+  async transferProject(from: Owner, to: Owner, project: string): Promise<number> {
+    const files = (await this.listUnder(from, project)).filter((f) => f.path.toLowerCase() !== `${project}/index.md`.toLowerCase());
+    if (files.length === 0) throw new PathError(`Project not found: ${project}`);
+    if (files.length > MAX_BATCH) throw new PathError(`Project too large (max ${MAX_BATCH} files)`);
+    if ((await this.listUnder(to, project)).length > 0) throw new PathError(`Project already exists in the destination: ${project}`);
+    for (const f of files) {
+      const obj = await this.bucket.get(objectKey(from, f.path));
+      if (!obj) continue;
+      await this.bucket.put(objectKey(to, f.path), await obj.arrayBuffer(), { httpMetadata: { contentType: obj.httpMetadata?.contentType } });
+    }
+    for (const f of files) await this.bucket.delete(objectKey(from, f.path));
+    await this.bucket.delete(objectKey(from, `${project}/index.md`));
+    await this.compileIndex(to, project);
+    return files.length;
+  }
+
   async delete(owner: Owner, rel: string): Promise<boolean> {
     const key = objectKey(owner, rel);
     if ((await this.bucket.head(key)) === null) return false;
