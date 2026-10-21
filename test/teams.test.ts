@@ -328,3 +328,48 @@ describe('move to team', () => {
     expect((await api('ed', 'POST', '/v1/projects/Plans/move-to-team', {})).status).toBe(400);
   });
 });
+
+describe('lazy loading endpoints', () => {
+  it('lists projects with counts and the checklist version, without reading any file', async () => {
+    await put('alice', 'alice', 'Alpha/a.md', 'a');
+    await put('alice', 'alice', 'Alpha/sub/b.md', 'bb');
+    const checklist = (await put('alice', 'alice', 'Alpha/checklist.md', '- [ ] x')).body.file;
+    await put('alice', 'alice', 'Beta/x.md', 'x');
+    await api('alice', 'PUT', '/v1/blob?path=Alpha/pic.png', undefined); // attachments are not counted
+
+    const { status, body } = await api('alice', 'GET', '/v1/projects');
+    expect(status).toBe(200);
+    expect(body.projects.map((p: any) => [p.name, p.file_count])).toEqual([['Alpha', 3], ['Beta', 1]]);
+    expect(body.projects[0]).toMatchObject({
+      checklist: { path: 'Alpha/checklist.md', etag: checklist.etag, size: 7 },
+      updated_at: '2026-01-02T00:00:00.000Z',
+    });
+    expect(body.projects[1].checklist).toBeNull();
+    // size covers every note, index included
+    const total = [...bucket.objects.entries()].filter(([k]) => k.startsWith('alice/Alpha/') && k.endsWith('.md')).reduce((n, [, o]) => n + o.bytes.length, 0);
+    expect(body.projects[0].size).toBe(total);
+  });
+
+  it('is scoped to the owner: other users, teams and roles', async () => {
+    const id = await newTeam();
+    await join(id, 'vi', 'viewer');
+    await put('alice', `t:${id}`, 'Shared/a.md', 'a');
+    await put('alice', 'alice', 'Mine/a.md', 'a');
+    expect((await api('alice', 'GET', '/v1/projects')).body.projects.map((p: any) => p.name)).toEqual(['Mine']);
+    expect((await api('vi', 'GET', `/v1/projects?owner=t:${id}`)).body.projects.map((p: any) => p.name)).toEqual(['Shared']);
+    expect((await api('bob', 'GET', '/v1/projects')).body.projects).toEqual([]);
+    expect((await api('bob', 'GET', `/v1/projects?owner=t:${id}`)).status).toBe(403);
+  });
+
+  it('lists the files of a single project', async () => {
+    await put('alice', 'alice', 'Alpha/a.md', 'a');
+    await put('alice', 'alice', 'Alpha/sub/b.md', 'b');
+    await put('alice', 'alice', 'Alphabet/c.md', 'c');
+    await put('alice', 'alice', 'Beta/x.md', 'x');
+    const paths = async (q: string) => (await api('alice', 'GET', `/v1/files?${q}`)).body.files.map((f: any) => f.path);
+    expect(await paths('project=Alpha')).toEqual(['Alpha/a.md', 'Alpha/index.md', 'Alpha/sub/b.md']); // not Alphabet
+    expect(await paths('project=Missing')).toEqual([]);
+    expect(await paths('')).toHaveLength(7); // 3 + 2 + 2, indexes included
+    expect((await api('alice', 'GET', '/v1/files?project=..%2Fx')).status).toBe(400);
+  });
+});

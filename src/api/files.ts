@@ -15,7 +15,8 @@ import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
  * (default: the caller's own). The caller's role on that owner decides: viewers
  * read, editors and owners write; anyone else gets 403.
  *
- *   GET    /v1/files[?attachments=1]      every note of the owner (path, size, uploaded, etag); attachments on request
+ *   GET    /v1/projects                   one row per project: {name, file_count, size, updated_at, checklist: {path, etag, size}|null}
+ *   GET    /v1/files[?attachments=1&project=P]  every note of the owner, or of one project (path, size, uploaded, etag); attachments on request
  *   GET    /v1/version                    {version, updated_at, scopes}: bumped on every change to the owner's files, by anyone;
  *                                         without ?owner, `scopes` holds the cursors of the caller's teams, keyed `t:<teamId>`
  *   GET    /v1/file?path=P/a.md           content + metadata
@@ -97,7 +98,13 @@ async function route(req: Request, env: Env, url: URL, userId: string, owner: Ow
   if (!(m === 'GET' ? canRead(role) : canWrite(role))) return json({ error: 'Forbidden' }, 403);
 
   if (path === '/v1/files' && m === 'GET') {
-    return json({ files: await store.listAllFiles(owner, { attachments: url.searchParams.get('attachments') === '1' }) });
+    // `?project=P` lists one project only: clients load the rest when the user opens it.
+    const project = url.searchParams.has('project') ? parseProject(url.searchParams.get('project')) : undefined;
+    return json({ files: await store.listAllFiles(owner, { attachments: url.searchParams.get('attachments') === '1', project }) });
+  }
+
+  if (path === '/v1/projects' && m === 'GET') {
+    return json({ projects: await store.listProjectSummaries(owner) });
   }
 
   if (path === '/v1/version' && m === 'GET') {

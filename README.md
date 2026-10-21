@@ -41,7 +41,8 @@ Enable it (off by default, `/oauth/*` is 404 until both are set):
 | `GET /v1/agents` · `PATCH/DELETE /v1/agents/:id` | list · change permissions · revoke |
 | `GET /v1/audit?limit&before&agent_id&project` | agent activity timeline |
 | `POST /v1/projects/:p/reindex` | rebuild `index.md` |
-| `GET /v1/files[?attachments=1]` | every note (and attachment, on request) with its etag |
+| `GET /v1/projects` | one row per project `{name, file_count, size, updated_at, checklist: {path, etag, size}\|null}` from a single listing: the home screen needs nothing more |
+| `GET /v1/files[?attachments=1&project=P]` | every note (and attachment, on request) with its etag; `project` limits it to one project, loaded when the user opens it |
 | `GET/PUT /v1/file?path=` · `DELETE /v1/file?path=` | read/write a note (`{content, overwrite?, if_match?}`) · delete a note or attachment |
 | `GET/PUT /v1/blob?path=` | raw attachment bytes (png, jpg, gif, webp, svg, pdf; ≤ 10 MiB); `?overwrite=1`, `If-Match`, `x-lore-etag` |
 | `DELETE /v1/folder?path=` · `POST /v1/files/move` | delete a folder · move a file or folder (byte-exact) |

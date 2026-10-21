@@ -25,6 +25,18 @@ export interface FileVersion {
   etag: string;
 }
 
+/** A project as listed on the home screen: counts plus the checklist's version (its content is fetched separately). */
+export interface ProjectSummary {
+  name: string;
+  /** Notes, without the generated index. */
+  file_count: number;
+  /** Bytes of every note, index included. */
+  size: number;
+  /** Newest note (the index does not count); empty when the project has none. */
+  updated_at: string;
+  checklist: { path: string; etag: string; size: number } | null;
+}
+
 /** Thrown when an `ifMatch` precondition fails: someone else changed the file meanwhile. */
 export class ConflictError extends Error {}
 
@@ -60,16 +72,45 @@ export class Store {
   }
 
   /**
-   * Every file of the user, across all projects. Attachments are listed only on
-   * request: older clients assume every listed file is a readable note.
+   * Every file of the owner, across all projects, or of one project. Attachments are
+   * listed only on request: older clients assume every listed file is a readable note.
    */
-  async listAllFiles(owner: Owner, opts: { attachments?: boolean } = {}): Promise<FileVersion[]> {
+  async listAllFiles(owner: Owner, opts: { attachments?: boolean; project?: string } = {}): Promise<FileVersion[]> {
     const root = `${owner}/`;
-    const { objects } = await this.listAll(root);
+    const { objects } = await this.listAll(opts.project ? `${root}${opts.project}/` : root);
     return objects
       .filter((o) => opts.attachments || isMarkdown(o.key))
       .map((o) => ({ path: o.key.slice(root.length), size: o.size, uploaded: o.uploaded.toISOString(), etag: o.etag }))
       .sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  /**
+   * One row per project, from a single listing (no file is read): enough to draw the
+   * project list and its checklist progress without downloading the project.
+   * Counts cover notes only, without the generated index.
+   */
+  async listProjectSummaries(owner: Owner): Promise<ProjectSummary[]> {
+    const root = `${owner}/`;
+    const { objects } = await this.listAll(root);
+    const byProject = new Map<string, ProjectSummary>();
+    for (const o of objects) {
+      if (!isMarkdown(o.key)) continue;
+      const rel = o.key.slice(root.length);
+      const slash = rel.indexOf('/');
+      if (slash === -1) continue;
+      const name = rel.slice(0, slash);
+      const inProject = rel.slice(slash + 1);
+      const row = byProject.get(name) ?? { name, file_count: 0, size: 0, updated_at: '', checklist: null };
+      byProject.set(name, row);
+      row.size += o.size;
+      const lower = inProject.toLowerCase();
+      if (lower === 'index.md') continue;
+      row.file_count++;
+      const uploaded = o.uploaded.toISOString();
+      if (uploaded > row.updated_at) row.updated_at = uploaded;
+      if (lower === 'checklist.md') row.checklist = { path: rel, etag: o.etag, size: o.size };
+    }
+    return [...byProject.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async exists(owner: Owner, rel: string): Promise<boolean> {
