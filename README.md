@@ -3,6 +3,10 @@
 Multi-tenant markdown knowledge base shared by users and their delegated AI agents.
 Serverless: **Cloudflare Workers** (MCP server + API), **R2** (files), **D1** (permissions, audit), **AWS Cognito** (user identity).
 
+**Client apps**
+- Mobile: [Davide255/lore-llm-mobile](https://github.com/Davide255/lore-llm-mobile)
+- Desktop: [Davide255/lore-llm-desktop](https://github.com/Davide255/lore-llm-desktop)
+
 ```
 Mobile app ──Cognito JWT──▶ /v1/*  (agents, permissions, audit, reindex)   ┐
                                                                             ├─ Worker ─▶ R2  {user_id}/{project}/…
