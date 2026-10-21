@@ -2,6 +2,7 @@ import { signAgentToken } from '../auth/agentToken';
 import { cognitoConfigFromEnv, verifyCognitoToken } from '../auth/cognito';
 import { AuthError, nowSeconds } from '../auth/jwt';
 import { listAudit } from '../db/audit';
+import { upsertUser } from '../db/users';
 import { handleFiles } from './files';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../db/permissions';
 import type { Env } from '../env';
@@ -37,7 +38,10 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
   if (!token) return json({ error: 'Missing bearer token' }, 401);
   let userId: string;
   try {
-    ({ userId } = await verifyCognitoToken(token, cognitoConfigFromEnv(env)));
+    const user = await verifyCognitoToken(token, cognitoConfigFromEnv(env));
+    userId = user.userId;
+    // Best effort: the directory must never make a valid request fail.
+    await upsertUser(env.DB, user).catch((err) => console.error('user upsert failed', String(err)));
   } catch (err) {
     if (err instanceof AuthError) return json({ error: err.message }, err.status);
     throw err;

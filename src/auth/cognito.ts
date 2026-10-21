@@ -50,12 +50,12 @@ async function getKey(url: string, kid: string, fetcher: Fetcher): Promise<Crypt
   return key;
 }
 
-/** Verifies a Cognito ID or access token and returns the user id (`sub`). */
+/** Verifies a Cognito ID or access token and returns the user id (`sub`) and, for ID tokens, email and name. */
 export async function verifyCognitoToken(
   token: string,
   cfg: CognitoConfig,
   fetcher: Fetcher = (u) => fetch(u),
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; email?: string; name?: string }> {
   const jwt = decodeJwt(token);
   if (jwt.header.alg !== 'RS256' || typeof jwt.header.kid !== 'string') throw new AuthError('Invalid token');
 
@@ -72,7 +72,12 @@ export async function verifyCognitoToken(
   const client = p.token_use === 'id' ? p.aud : p.token_use === 'access' ? p.client_id : undefined;
   if (typeof client !== 'string' || !cfg.clientIds.includes(client)) throw new AuthError('Invalid token audience');
   if (typeof p.sub !== 'string' || !USER_ID_RE.test(p.sub)) throw new AuthError('Invalid token subject');
-  return { userId: p.sub };
+  // Only ID tokens carry the profile; access tokens leave these undefined.
+  return {
+    userId: p.sub,
+    ...(typeof p.email === 'string' ? { email: p.email } : {}),
+    ...(typeof p.name === 'string' ? { name: p.name } : {}),
+  };
 }
 
 export function cognitoConfigFromEnv(env: {

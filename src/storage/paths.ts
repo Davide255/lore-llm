@@ -4,6 +4,8 @@
  * (or, where the caller opts in, an allowed attachment extension).
  * The tenant prefix is added exclusively by `objectKey`.
  */
+import type { Owner } from './owner';
+
 export class PathError extends Error {}
 
 const MAX_PATH = 512;
@@ -105,7 +107,7 @@ export function parseFolder(input: unknown): string {
   return segments(input, 'folder').join('/');
 }
 
-/** The one place where the tenant prefix is applied. */
-export function objectKey(userId: string, rel: string): string {
-  return `${userId}/${rel}`;
+/** The one place where the owner prefix (a user id or `t:<teamId>`) is applied. */
+export function objectKey(owner: Owner, rel: string): string {
+  return `${owner}/${rel}`;
 }
