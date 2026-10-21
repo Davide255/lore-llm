@@ -117,6 +117,15 @@ export class Store {
     return (await this.bucket.head(objectKey(owner, rel))) !== null;
   }
 
+  /** Permanently removes every object of the owner (notes and attachments). Returns how many. */
+  async deleteAll(owner: Owner): Promise<number> {
+    const { objects } = await this.listAll(`${owner}/`);
+    const keys = objects.map((o) => o.key);
+    // One R2 call per 1000 keys, to stay well under the per-request subrequest limit.
+    for (let i = 0; i < keys.length; i += 1000) await this.bucket.delete(keys.slice(i, i + 1000));
+    return keys.length;
+  }
+
   /** Files under `Project/` or `Project/folder/` (used to move/delete whole folders). */
   async listUnder(owner: Owner, relPrefix: string): Promise<FileVersion[]> {
     const root = `${owner}/`;

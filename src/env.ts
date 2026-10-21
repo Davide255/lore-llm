@@ -11,6 +11,12 @@ export interface Env {
   COGNITO_DOMAIN?: string;
   /** Cognito app client (public, PKCE) whose callback is `<worker>/oauth/callback`. */
   OAUTH_COGNITO_CLIENT_ID?: string;
+  /**
+   * Optional IAM credentials allowed `cognito-idp:AdminDeleteUser` on the user pool (wrangler secrets).
+   * Without them, account deletion still wipes all data but leaves the Cognito identity in place.
+   */
+  AWS_ACCESS_KEY_ID?: string;
+  AWS_SECRET_ACCESS_KEY?: string;
   /** Comma-separated allowed browser origins. */
   ALLOWED_ORIGINS?: string;
 }

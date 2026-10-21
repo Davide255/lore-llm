@@ -53,6 +53,7 @@ Enable it (off by default, `/oauth/*` is 404 until both are set):
 | `GET/POST /v1/teams/:id/invites` · `DELETE /v1/teams/:id/invites/:inviteId` | pending invitations · invite by email `{email, role: editor\|viewer}` (expires after 14 days) · revoke (owners only) |
 | `GET /v1/invites` · `POST /v1/invites/:id/accept\|decline` | invitations addressed to your email · answer one |
 | `POST /v1/projects/:p/move-to-team` | `{team_id}`: move a personal project into a team you can write to |
+| `DELETE /v1/account` | permanently delete the caller's files, agents, audit log, memberships, invites and shares, and (if `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` secrets allow `cognito-idp:AdminDeleteUser`) their Cognito user; refused with 409 while they are the only owner of a team |
 
 ## Develop
 ```bash

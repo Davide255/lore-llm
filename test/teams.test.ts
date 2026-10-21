@@ -373,3 +373,40 @@ describe('lazy loading endpoints', () => {
     expect((await api('alice', 'GET', '/v1/files?project=..%2Fx')).status).toBe(400);
   });
 });
+
+describe('account deletion and teams', () => {
+  it('is refused while the caller is the only owner of a team, and nothing is deleted', async () => {
+    const id = await newTeam('alice');
+    await put('alice', 'alice', 'Mine/a.md', 'a');
+    const res = await api('alice', 'DELETE', '/v1/account');
+    expect(res.status).toBe(409);
+    expect([...bucket.objects.keys()].some((k) => k.startsWith('alice/'))).toBe(true);
+    expect((await api('alice', 'GET', `/v1/teams/${id}`)).status).toBe(200);
+  });
+
+  it('removes the member from teams with other owners and leaves team files and others alone', async () => {
+    const id = await newTeam('alice');
+    await join(id, 'bob', 'editor');
+    await api('alice', 'PATCH', `/v1/teams/${id}/members/bob`, { role: 'owner' });
+    await put('alice', `t:${id}`, 'Shared/a.md', 'a');
+    await put('alice', 'alice', 'Mine/a.md', 'a');
+    const pending = await api('alice', 'POST', `/v1/teams/${id}/invites`, { email: 'dave@example.com', role: 'viewer' });
+    expect(pending.status).toBe(201);
+
+    expect((await api('alice', 'DELETE', '/v1/account')).status).toBe(200);
+
+    expect([...bucket.objects.keys()].filter((k) => k.startsWith('alice/'))).toEqual([]);
+    expect([...bucket.objects.keys()].some((k) => k.startsWith(`t:${id}/Shared/a.md`))).toBe(true);
+    const members = (await api('bob', 'GET', `/v1/teams/${id}/members`)).body.members;
+    expect(members.map((m: any) => m.user_id)).toEqual(['bob']);
+    expect((await api('bob', 'GET', `/v1/teams/${id}/invites`)).body.invites).toEqual([]);
+  });
+
+  it('drops invitations addressed to the deleted account', async () => {
+    const id = await newTeam('alice');
+    await api('bob', 'GET', '/v1/teams'); // records bob's email
+    await api('alice', 'POST', `/v1/teams/${id}/invites`, { email: 'bob@example.com', role: 'viewer' });
+    expect((await api('bob', 'DELETE', '/v1/account')).status).toBe(200);
+    expect((await api('alice', 'GET', `/v1/teams/${id}/invites`)).body.invites).toEqual([]);
+  });
+});

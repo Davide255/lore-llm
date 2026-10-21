@@ -440,3 +440,31 @@ describe('management API', () => {
     expect(bucket.text('u1/Alpha/index.md')).toContain('[a.md](a.md)');
   });
 });
+
+describe('account deletion', () => {
+  it('wipes the caller’s files, agents and audit log and leaves other users alone', async () => {
+    const { token: bot } = await newAgent('u1', '*', 'read_write');
+    await newAgent('u2', '*', 'read_write');
+    await tool(bot, 'write_file', { path: 'Alpha/a.md', content: 'x' });
+    bucket.objects.set('u2/Beta/b.md', { ...bucket.objects.get('u1/Alpha/a.md')! });
+    expect([...bucket.objects.keys()].some((k) => k.startsWith('u1/'))).toBe(true);
+
+    const res = await call('/v1/account', { method: 'DELETE', token: await cognito('u1') });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, identity_deleted: false });
+
+    expect([...bucket.objects.keys()].filter((k) => k.startsWith('u1/'))).toEqual([]);
+    expect(bucket.objects.has('u2/Beta/b.md')).toBe(true);
+    // u1's agent token no longer works; u2 still has its agent.
+    expect((await call('/mcp', { method: 'POST', token: bot, body: '{}' })).status).toBe(401);
+    const agents = await (await call('/v1/agents', { method: 'GET', token: await cognito('u2') })).json();
+    expect((agents as any).agents).toHaveLength(1);
+    expect(((await (await call('/v1/audit', { method: 'GET', token: await cognito('u1') })).json()) as any).items).toEqual([]);
+    // Idempotent.
+    expect((await call('/v1/account', { method: 'DELETE', token: await cognito('u1') })).status).toBe(200);
+  });
+
+  it('requires a valid user token', async () => {
+    expect((await call('/v1/account', { method: 'DELETE', token: 'garbage' })).status).toBe(401);
+  });
+});
