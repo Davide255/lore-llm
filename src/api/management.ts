@@ -1,8 +1,12 @@
 import { signAgentToken } from '../auth/agentToken';
+import { adminDeleteUser } from '../auth/cognitoAdmin';
 import { cognitoConfigFromEnv, verifyCognitoToken } from '../auth/cognito';
 import { AuthError, nowSeconds } from '../auth/jwt';
+import { deleteUserRows, soleOwnedTeams } from '../db/account';
 import { listAudit } from '../db/audit';
+import { upsertUser } from '../db/users';
 import { handleFiles } from './files';
+import { handleTeams } from './teams';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../db/permissions';
 import type { Env } from '../env';
 import { bearerToken } from '../mcp/server';
@@ -37,7 +41,10 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
   if (!token) return json({ error: 'Missing bearer token' }, 401);
   let userId: string;
   try {
-    ({ userId } = await verifyCognitoToken(token, cognitoConfigFromEnv(env)));
+    const user = await verifyCognitoToken(token, cognitoConfigFromEnv(env));
+    userId = user.userId;
+    // Best effort: the directory must never make a valid request fail.
+    await upsertUser(env.DB, user).catch((err) => console.error('user upsert failed', String(err)));
   } catch (err) {
     if (err instanceof AuthError) return json({ error: err.message }, err.status);
     throw err;
@@ -49,6 +56,33 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
 
     const files = await handleFiles(req, env, url, userId);
     if (files) return files;
+
+    const teams = await handleTeams(req, env, url, userId);
+    if (teams) return teams;
+
+    // Account deletion (App Store 5.1.1(v)): wipe the user's data, then their identity. Retrying is safe.
+    if (path === '/v1/account' && m === 'DELETE') {
+      if ((await soleOwnedTeams(env.DB, userId)).length) {
+        return json({ error: 'You are the only owner of a team: make someone else owner or delete the team first' }, 409);
+      }
+      await deleteUserRows(env.DB, userId);
+      await new Store(env.BUCKET).deleteAll(userId);
+      let identityDeleted = false;
+      if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
+        const cfg = cognitoConfigFromEnv(env);
+        try {
+          await adminDeleteUser(
+            { region: cfg.region, userPoolId: cfg.userPoolId, accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY },
+            userId,
+          );
+          identityDeleted = true;
+        } catch (err) {
+          console.error('cognito delete failed', String(err));
+          return json({ error: 'Could not delete the sign-in identity, try again' }, 502);
+        }
+      }
+      return json({ ok: true, identity_deleted: identityDeleted });
+    }
 
     if (path === '/v1/agents' && m === 'GET') {
       const rows = await listAgents(env.DB, userId);
