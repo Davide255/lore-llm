@@ -341,7 +341,7 @@ describe('lazy loading endpoints', () => {
     expect(status).toBe(200);
     expect(body.projects.map((p: any) => [p.name, p.file_count])).toEqual([['Alpha', 3], ['Beta', 1]]);
     expect(body.projects[0]).toMatchObject({
-      checklist: { path: 'Alpha/checklist.md', etag: checklist.etag, size: 7 },
+      checklist: { path: 'Alpha/checklist.md', etag: checklist.etag, size: 7, uploaded: checklist.uploaded },
       updated_at: '2026-01-02T00:00:00.000Z',
     });
     expect(body.projects[1].checklist).toBeNull();

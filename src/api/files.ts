@@ -15,7 +15,7 @@ import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
  * (default: the caller's own). The caller's role on that owner decides: viewers
  * read, editors and owners write; anyone else gets 403.
  *
- *   GET    /v1/projects                   one row per project: {name, file_count, size, updated_at, checklist: {path, etag, size}|null}
+ *   GET    /v1/projects                   one row per project: {name, file_count, size, updated_at, checklist: {path, etag, size, uploaded}|null}
  *   GET    /v1/files[?attachments=1&project=P]  every note of the owner, or of one project (path, size, uploaded, etag); attachments on request
  *   GET    /v1/version                    {version, updated_at, scopes}: bumped on every change to the owner's files, by anyone;
  *                                         without ?owner, `scopes` holds the cursors of the caller's teams, keyed `t:<teamId>`

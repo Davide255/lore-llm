@@ -34,7 +34,7 @@ export interface ProjectSummary {
   size: number;
   /** Newest note (the index does not count); empty when the project has none. */
   updated_at: string;
-  checklist: { path: string; etag: string; size: number } | null;
+  checklist: { path: string; etag: string; size: number; uploaded: string } | null;
 }
 
 /** Thrown when an `ifMatch` precondition fails: someone else changed the file meanwhile. */
@@ -108,7 +108,7 @@ export class Store {
       row.file_count++;
       const uploaded = o.uploaded.toISOString();
       if (uploaded > row.updated_at) row.updated_at = uploaded;
-      if (lower === 'checklist.md') row.checklist = { path: rel, etag: o.etag, size: o.size };
+      if (lower === 'checklist.md') row.checklist = { path: rel, etag: o.etag, size: o.size, uploaded };
     }
     return [...byProject.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
