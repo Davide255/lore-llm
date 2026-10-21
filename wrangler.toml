@@ -11,8 +11,9 @@ COGNITO_REGION = "eu-north-1"
 COGNITO_USER_POOL_ID = "eu-north-1_orShbeG8H"
 # Comma-separated list of app client ids allowed to call the management API
 COGNITO_CLIENT_IDS = "97beb3qgebbmbqrnr0erhs37v,2ij9dpmj7gacqj370obj0lehg2,730nauiaj6dc4dfjdrfvrd7eak"
-# Comma-separated browser origins allowed on the management API (CORS + MCP Origin check)
-ALLOWED_ORIGINS = ""
+# Comma-separated browser origins allowed on the management API (CORS + MCP Origin check).
+# davide255.github.io: the web build of lore-llm-desktop on GitHub Pages.
+ALLOWED_ORIGINS = "https://davide255.github.io"
 # OAuth for /mcp (hosted connectors). Both must be set to enable it; see README "OAuth for MCP clients".
 COGNITO_DOMAIN = "eu-north-1orshbeg8h.auth.eu-north-1.amazoncognito.com"
 OAUTH_COGNITO_CLIENT_ID = "6mbpkbo3m6m13g5vrv5pae83sg"
