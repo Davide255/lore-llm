@@ -8,7 +8,7 @@
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:migrate:local": "wrangler d1 migrations apply lore-llm-db --local",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply lore-llm-db --remote",
     "deploy": "wrangler deploy"
   },

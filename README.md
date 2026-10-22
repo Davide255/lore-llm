@@ -3,6 +3,12 @@
 Multi-tenant markdown knowledge base shared by users and their delegated AI agents.
 Serverless: **Cloudflare Workers** (MCP server + API), **R2** (files), **D1** (permissions, audit), **AWS Cognito** (user identity).
 
+**Quick links:** [Website](https://davide255.github.io/lore-llm/) ·
+[Web app](https://davide255.github.io/lore-llm-desktop/) ·
+[Getting started](#getting-started) ·
+[Privacy policy](https://davide255.github.io/lore-llm/privacy-policy/) ·
+[Terms of service](https://davide255.github.io/lore-llm/terms-of-service/)
+
 **Client apps**
 - Mobile: [Davide255/lore-llm-mobile](https://github.com/Davide255/lore-llm-mobile)
 - Desktop: [Davide255/lore-llm-desktop](https://github.com/Davide255/lore-llm-desktop)
@@ -12,6 +18,62 @@ Mobile app ──Cognito JWT──▶ /v1/*  (agents, permissions, audit, reinde
                                                                             ├─ Worker ─▶ R2  {user_id}/{project}/…
 AI agent ───Agent token───▶ /mcp   (MCP Streamable HTTP, stateless)         ┘            └▶ D1  permissions, audit_logs
 ```
+
+## Getting started
+
+### Prerequisites
+- **Node.js 22+** and npm.
+- A free **Cloudflare** account (Workers, R2, D1) — only needed to deploy.
+- An **AWS Cognito** user pool (sign-in for the apps; the Worker verifies its tokens) — only needed to deploy.
+
+### 1. Run it locally
+```bash
+git clone https://github.com/Davide255/lore-llm.git && cd lore-llm
+npm ci
+npm run typecheck && npm test      # R2/D1 are faked in tests, no account needed
+
+cp .dev.vars.example .dev.vars     # local secrets (AGENT_TOKEN_SECRET), never committed
+npm run db:migrate:local           # creates the local D1 schema (migrations/*.sql)
+npm run dev                        # wrangler dev, Worker on http://localhost:8787
+```
+`wrangler dev` simulates R2 and D1 on disk (`.wrangler/`). Sign-in tokens are still verified against the Cognito
+pool in `wrangler.toml`, so to use the local Worker with a client you need either that pool or your own (step 2).
+
+### 2. Deploy your own
+1. `npx wrangler login`, then create the storage:
+   ```bash
+   npx wrangler r2 bucket create <your-bucket>
+   npx wrangler d1 create <your-db>        # prints the database_id
+   ```
+2. In `wrangler.toml` set `name`, `bucket_name`, `database_name` and `database_id` to your own values.
+3. **Cognito**: create a user pool and a public app client (no secret), then set `COGNITO_REGION`,
+   `COGNITO_USER_POOL_ID` and `COGNITO_CLIENT_IDS` (comma-separated client ids allowed on `/v1/*`) in `wrangler.toml`.
+   Add Google as federated identity provider if you want "Sign in with Google" like the apps.
+4. Set the secret that signs agent tokens (≥ 32 random characters):
+   ```bash
+   openssl rand -base64 48 | npx wrangler secret put AGENT_TOKEN_SECRET
+   ```
+5. Apply the migrations and deploy:
+   ```bash
+   npx wrangler d1 migrations apply DB --remote
+   npm run deploy                          # prints https://<name>.<account>.workers.dev
+   ```
+6. Optional: `ALLOWED_ORIGINS` for browser clients (e.g. the [web app](https://davide255.github.io/lore-llm-desktop/)),
+   and OAuth for hosted MCP connectors (see [OAuth for MCP clients](#oauth-for-mcp-clients)).
+
+The repo's CI (`.github/workflows/ci.yml`) runs typecheck + tests on every push and deploys the dev environment from
+`main`; it needs the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. Production is a manual run with
+*Deploy to production* checked.
+
+### 3. Point a client at it
+- **Desktop / web app**: run it with `LORE_API_URL=https://<your-worker>.workers.dev` and your Cognito values
+  (see [lore-llm-desktop](https://github.com/Davide255/lore-llm-desktop#getting-started)).
+- **AI agent**: sign in to an app, *Settings → Agents*, create an agent (projects + read / read-write) and copy its token, then:
+  ```bash
+  claude mcp add --transport http lore https://<your-worker>.workers.dev/mcp \
+    --header "Authorization: Bearer $LORE_TOKEN"
+  ```
+  Codex, raw HTTP and the OAuth flow for Claude.ai / ChatGPT connectors are shown on the [project site](https://davide255.github.io/lore-llm/#connect).
 
 ## MCP tools
 - Files: `list_projects`, `list_files`, `read_file`, `read_file_lines`, `search_files`, `write_file`, `append_file`, `patch_file`, `delete_file`
@@ -56,11 +118,7 @@ Enable it (off by default, `/oauth/*` is 404 until both are set):
 | `DELETE /v1/account` | permanently delete the caller's files, agents, audit log, memberships, invites and shares, and (if `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` secrets allow `cognito-idp:AdminDeleteUser`) their Cognito user; refused with 409 while they are the only owner of a team |
 
 ## Develop
-```bash
-npm ci
-npm run typecheck && npm test      # R2/D1 are faked in tests (D1 via node:sqlite)
-cp .dev.vars.example .dev.vars     # then: npm run db:migrate:local && npm run dev
-```
+Setup and local run: see [Getting started](#getting-started). Tests fake R2 and D1 (D1 via `node:sqlite`).
 
 Docs: [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md) (deviations from the overview and why) ·
 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) (deployment plan).
