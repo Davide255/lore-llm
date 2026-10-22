@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Lore LLM</title>
-  <meta name="description" content="A markdown knowledge base shared between you and your AI agents. Edit it from desktop and mobile; agents read and write it through MCP with scoped, revocable tokens.">
+  <meta name="description" content="A markdown knowledge base shared between you and your AI agents. Edit it from desktop, browser and mobile, alone or with a team; agents read and write it through MCP with scoped, revocable tokens.">
   <meta property="og:title" content="Lore LLM — a knowledge base for you and your agents">
-  <meta property="og:description" content="Markdown you edit on desktop and mobile, that Claude and Codex read and write through MCP. Scoped tokens, audit trail, one-tap restore.">
+  <meta property="og:description" content="Markdown you edit on desktop, web and mobile, with your team, that Claude and Codex read and write through MCP. Scoped tokens, audit trail, one-tap restore.">
   <meta property="og:type" content="website">
   <meta name="theme-color" content="#121211">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -289,11 +289,12 @@
     <div class="hero">
       <div class="wrap">
         <div>
-          <span class="eyebrow"><span class="dot"></span>MCP server · Desktop · Mobile</span>
+          <span class="eyebrow"><span class="dot"></span>MCP server · Desktop · Web · Mobile</span>
           <h1>One knowledge base.<br><span class="grad">You and your agents.</span></h1>
-          <p class="lede">Lore LLM is a markdown knowledge base you edit from your desktop and phone, and that Claude, Codex and other AI agents read and write through MCP, each with its own scoped, revocable token.</p>
+          <p class="lede">Lore LLM is a markdown knowledge base you edit from your desktop, browser and phone, share with your team, and that Claude, Codex and other AI agents read and write through MCP, each with its own scoped, revocable token.</p>
           <div class="cta">
             <a class="btn primary" href="#connect">Connect an agent</a>
+            <a class="btn" href="https://davide255.github.io/lore-llm-desktop/">Open the web app</a>
             <a class="btn" href="https://github.com/Davide255/lore-llm">View the source</a>
           </div>
           <div class="hero-meta">
@@ -348,7 +349,7 @@
         <div class="flow">
           <div class="node">
             <h3>You</h3>
-            <div class="role">Desktop &amp; mobile apps</div>
+            <div class="role">Desktop, web &amp; mobile apps</div>
             <ul>
               <li>Browse projects, write and organise notes</li>
               <li>Tick checklists in place</li>
@@ -413,8 +414,23 @@
           </div>
           <div class="card">
             <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="13" height="10" rx="2"/><rect x="15" y="9" width="6" height="11" rx="1.5"/><path d="M7 18h5"/></svg></div>
-            <h3>Desktop and mobile</h3>
-            <p>An Electron editor for macOS and Windows and a native Expo app for iOS and Android, both signed in to the same knowledge base.</p>
+            <h3>Desktop, web and mobile</h3>
+            <p>An Electron editor for macOS, Windows and Linux, the same UI <a href="https://davide255.github.io/lore-llm-desktop/">in your browser</a>, and a native Expo app for iOS and Android, all signed in to the same knowledge base.</p>
+          </div>
+          <div class="card">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0112 0"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2A5 5 0 0121 19"/></svg></div>
+            <h3>Teams and roles</h3>
+            <p>Create a team, invite people by email as <b>owner</b>, <b>editor</b> or <b>viewer</b>, and move a project into it. Roles are enforced by the server, not just hidden in the UI.</p>
+          </div>
+          <div class="card">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></div>
+            <h3>Obsidian sync</h3>
+            <p>Keep a local copy of your knowledge base as a plain folder and open it as an Obsidian vault. Edits sync both ways, concurrent changes are three-way merged, and wikilinks work.</p>
+          </div>
+          <div class="card">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg></div>
+            <h3>Hosted MCP connectors</h3>
+            <p>Add the <code>/mcp</code> URL to Claude.ai or ChatGPT and approve access with OAuth: you pick the projects and read or read-write, no token to paste.</p>
           </div>
         </div>
       </div>
@@ -428,10 +444,11 @@
           <h2>Three steps, one token.</h2>
           <p class="sub" style="margin-bottom:32px">The server speaks MCP over Streamable HTTP. Any client that can send a bearer header can connect.</p>
           <ol class="steps">
-            <li><div><h3>Sign in to the app</h3><p>Open Lore LLM on desktop or mobile and sign in with Google.</p></div></li>
+            <li><div><h3>Sign in to the app</h3><p>Open Lore LLM on desktop, mobile or <a href="https://davide255.github.io/lore-llm-desktop/">in the browser</a> and sign in with Google.</p></div></li>
             <li><div><h3>Create an agent</h3><p>In <em>Settings → Agents</em>, pick Claude or Codex, choose its projects and access level. The token is shown once and never stored by the server.</p></div></li>
             <li><div><h3>Paste the setup</h3><p>Copy the generated command or config into your agent. It can now list, read and write notes in its scope.</p></div></li>
           </ol>
+          <p class="sub" style="margin:28px 0 0">Using Claude.ai, ChatGPT or <code>claude mcp add</code> without a header? Add your <code>/mcp</code> URL as a connector and sign in with OAuth instead: the consent page creates the agent for you.</p>
         </div>
         <div class="code">
           <div class="tabs" role="tablist" aria-label="Agent">
@@ -468,15 +485,27 @@ http_headers = { Authorization = <span class="s">"Bearer <span class="v">$LORE_T
     <section id="tools" class="rule">
       <div class="wrap">
         <div class="kicker">MCP tools</div>
-        <h2>Six tools, all scoped.</h2>
-        <p class="sub">Every call is confined to the agent's user and project scope, and every write is recorded in the audit log.</p>
+        <h2>Eighteen tools, all scoped.</h2>
+        <p class="sub">Every call is confined to the agent's user and project scope, write tools need a read-write agent, and every write is recorded in the audit log.</p>
         <div class="tools">
           <div class="tool"><span class="lvl r">read</span><code>list_projects</code><p>Projects this agent is allowed to see.</p></div>
           <div class="tool"><span class="lvl r">read</span><code>list_files</code><p>Notes and attachments in a project or folder.</p></div>
           <div class="tool"><span class="lvl r">read</span><code>read_file</code><p>Read a markdown note, including the project's <code>index.md</code>.</p></div>
+          <div class="tool"><span class="lvl r">read</span><code>read_file_lines</code><p>Read just a range of lines from a long note.</p></div>
+          <div class="tool"><span class="lvl r">read</span><code>search_files</code><p>Case-insensitive keyword search across the notes in scope.</p></div>
+          <div class="tool"><span class="lvl r">read</span><code>get_checklist</code><p>A project's checklist with a completed/total summary.</p></div>
           <div class="tool"><span class="lvl w">write</span><code>write_file</code><p>Create a note. Overwriting needs an explicit <code>overwrite: true</code>.</p></div>
-          <div class="tool"><span class="lvl w">write</span><code>append_file</code><p>Append safely with an etag precondition, ideal for logs and checklists.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>append_file</code><p>Append safely with an etag precondition, ideal for logs.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>patch_file</code><p>Replace a precise piece of text instead of rewriting the whole note.</p></div>
           <div class="tool"><span class="lvl w">write</span><code>delete_file</code><p>Remove a note the agent has read-write access to.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>add_checklist_item</code><p>Add an item, optionally under a <code>## version</code> section.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>check_item</code><p>Tick or untick items by text; only that line changes.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>edit_checklist_item</code><p>Reword an item without touching the rest.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>move_checklist_item</code><p>Move an item to another section.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>delete_checklist_item</code><p>Remove an item from the checklist.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>create_project</code><p>Start a new project folder.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>rename_project</code><p>Rename a project and move all its files.</p></div>
+          <div class="tool"><span class="lvl w">write</span><code>delete_project</code><p>Delete a project; it needs an explicit <code>confirm: true</code>.</p></div>
         </div>
       </div>
     </section>
@@ -495,9 +524,9 @@ http_headers = { Authorization = <span class="s">"Bearer <span class="v">$LORE_T
             <span class="repo">Davide255/lore-llm →</span>
           </a>
           <a class="app" href="https://github.com/Davide255/lore-llm-desktop">
-            <div class="tag">Desktop · Electron + React Native Web</div>
+            <div class="tag">Desktop · Electron + web</div>
             <h3>Lore LLM Desktop</h3>
-            <p>Keyboard-first editor with ⌘K search, inline checklist editing, undoable deletes and a live activity view with diffs.</p>
+            <p>Keyboard-first editor with ⌘K search, inline checklists, undoable deletes, teams, Obsidian sync and a live activity view with diffs. Also runs in the browser.</p>
             <span class="repo">Davide255/lore-llm-desktop →</span>
           </a>
           <a class="app" href="https://github.com/Davide255/lore-llm-mobile">
@@ -521,6 +550,8 @@ http_headers = { Authorization = <span class="s">"Bearer <span class="v">$LORE_T
           <div class="principle"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg><div><b>Instant revocation</b><span>A token only identifies the agent. Its permissions live in D1, so deleting the row cuts access at once. Tokens expire after 90 days by default.</span></div></div>
           <div class="principle"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg><div><b>No silent clobbering</b><span>Writes don't overwrite unless asked, appends use etag preconditions, and <code>index.md</code> is read-only for agents.</span></div></div>
           <div class="principle"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg><div><b>Attachments stay with you</b><span>Agents see that images and PDFs exist but can't read or write their bytes.</span></div></div>
+          <div class="principle"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg><div><b>Roles checked on the server</b><span>Team viewers can read but never write: the Worker answers 403, whatever a client shows.</span></div></div>
+          <div class="principle"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg><div><b>Agents stay on your own projects</b><span>An agent token reaches the projects in your personal space only, never a team's.</span></div></div>
         </div>
       </div>
     </section>
@@ -531,7 +562,7 @@ http_headers = { Authorization = <span class="s">"Bearer <span class="v">$LORE_T
         <div>
           <div class="kicker">Self-host</div>
           <h2>Runs on the free tier.</h2>
-          <p>The backend fits Cloudflare's free plan: 100k requests a day, and every request is I/O-bound apart from a single JWT verification. Bring your own Cognito user pool and deploy with Wrangler.</p>
+          <p>The backend fits Cloudflare's free plan: 100k requests a day, and every request is I/O-bound apart from a single JWT verification. Bring your own Cognito user pool and deploy with Wrangler: the <a href="https://github.com/Davide255/lore-llm#getting-started">step-by-step guide</a> is in the README.</p>
           <div class="stack"><span>Cloudflare Workers</span><span>R2</span><span>D1</span><span>AWS Cognito</span><span>MCP Streamable HTTP</span></div>
         </div>
         <div class="code">
@@ -547,7 +578,8 @@ npm run db:migrate:local &amp;&amp; npm run dev
 
 <span class="c"># deploy</span>
 npx wrangler secret put AGENT_TOKEN_SECRET
-npm run db:migrate:remote &amp;&amp; npm run deploy</code></pre>
+npx wrangler d1 migrations apply DB --remote
+npm run deploy</code></pre>
         </div>
       </div>
     </section>
@@ -560,6 +592,7 @@ npm run db:migrate:remote &amp;&amp; npm run deploy</code></pre>
         <a href="https://github.com/Davide255/lore-llm">Server</a>
         <a href="https://github.com/Davide255/lore-llm-desktop">Desktop</a>
         <a href="https://github.com/Davide255/lore-llm-mobile">Mobile</a>
+        <a href="https://davide255.github.io/lore-llm-desktop/">Web app</a>
         <a href="https://github.com/Davide255/lore-llm/blob/main/docs/ARCHITECTURE_DECISIONS.md">Architecture</a>
         <a href="privacy-policy/">Privacy</a>
         <a href="terms-of-service/">Terms</a>
