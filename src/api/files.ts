@@ -1,9 +1,12 @@
+import { searchNotes } from '../db/searchIndex';
+import { MAX_STARS, addStar, listStars, moveStars, unstar } from '../db/stars';
 import { listUserTeams } from '../db/teams';
 import { bumpVersion, getVersion, getVersions } from '../db/version';
 import type { Env } from '../env';
 import { canRead, canWrite, resolveAccess } from '../permissions/access';
 import { parseOwner, teamOwner, userOwner, type Owner } from '../storage/owner';
 import { PathError, isStorableFile, parseFolder, parsePath, parseProject } from '../storage/paths';
+import { parseQuery } from '../storage/search';
 import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
 
 /**
@@ -17,6 +20,12 @@ import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
  *
  *   GET    /v1/projects                   one row per project: {name, file_count, size, updated_at, checklist: {path, etag, size, uploaded}|null}
  *   GET    /v1/files[?attachments=1&project=P]  every note of the owner, or of one project (path, size, uploaded, etag); attachments on request
+ *   GET    /v1/search?q=a+b[&project=P&limit=N]  full-text search over the owner's notes: every term (prefix match) must appear;
+ *                                         ranked by BM25 (D1 FTS5); {hits:[{path,score,pathMatch,snippets:[{line,text}]}], scanned, truncated};
+ *                                         truncated = some notes are not indexed yet, search again for complete results
+ *   GET    /v1/stars                      the caller's starred notes across their own space and their teams': {stars:[{owner,path,starred_at}]}
+ *   PUT    /v1/stars?owner=&path=P/a.md   star a note (idempotent; the note must exist; read access is enough)
+ *   DELETE /v1/stars?owner=&path=P/a.md   unstar
  *   GET    /v1/version                    {version, updated_at, scopes}: bumped on every change to the owner's files, by anyone;
  *                                         without ?owner, `scopes` holds the cursors of the caller's teams, keyed `t:<teamId>`
  *   GET    /v1/file?path=P/a.md           content + metadata
@@ -74,6 +83,7 @@ function requestOwner(url: URL, userId: string): Owner {
 export async function handleFiles(req: Request, env: Env, url: URL, userId: string): Promise<Response | null> {
   try {
     const owner = requestOwner(url, userId);
+    if (url.pathname === '/v1/stars') return await handleStars(req, env, url, userId, owner);
     const res = await route(req, env, url, userId, owner);
     // Any successful change moves the owner's change cursor.
     // The write already happened: a failed bump must not turn it into an error.
@@ -86,6 +96,29 @@ export async function handleFiles(req: Request, env: Env, url: URL, userId: stri
     if (err instanceof ConflictError) return json({ error: err.message }, 409);
     throw err;
   }
+}
+
+/**
+ * Stars belong to the caller, not to the space they point into: a viewer can
+ * star a team note, and starring must not move the team's change cursor (it
+ * moves the caller's own, so their other devices resync).
+ */
+async function handleStars(req: Request, env: Env, url: URL, userId: string, owner: Owner): Promise<Response> {
+  const store = new Store(env.BUCKET);
+  if (req.method === 'GET') return json({ stars: await listStars(env.DB, store, userId) });
+  if (req.method !== 'PUT' && req.method !== 'DELETE') return json({ error: 'Method not allowed' }, 405);
+  if (!canRead(await resolveAccess(env.DB, userId, owner))) return json({ error: 'Forbidden' }, 403);
+  const p = parsePath(url.searchParams.get('path'));
+  rejectIndex(p.isIndex);
+  if (req.method === 'DELETE') {
+    const removed = await unstar(env.DB, userId, owner, p.rel);
+    if (removed) await bumpVersion(env.DB, userId).catch((err) => console.error('version bump failed', String(err)));
+    return json({ ok: true, removed });
+  }
+  if (!(await store.exists(owner, p.rel))) return json({ error: 'Not found' }, 404);
+  if (!(await addStar(env.DB, userId, owner, p.rel))) throw new PathError(`Too many starred notes (max ${MAX_STARS})`);
+  await bumpVersion(env.DB, userId).catch((err) => console.error('version bump failed', String(err)));
+  return json({ ok: true });
 }
 
 async function route(req: Request, env: Env, url: URL, userId: string, owner: Owner): Promise<Response | null> {
@@ -101,6 +134,15 @@ async function route(req: Request, env: Env, url: URL, userId: string, owner: Ow
     // `?project=P` lists one project only: clients load the rest when the user opens it.
     const project = url.searchParams.has('project') ? parseProject(url.searchParams.get('project')) : undefined;
     return json({ files: await store.listAllFiles(owner, { attachments: url.searchParams.get('attachments') === '1', project }) });
+  }
+
+  if (path === '/v1/search' && m === 'GET') {
+    const terms = parseQuery(url.searchParams.get('q'));
+    if (terms.length === 0) throw new PathError('q is required');
+    const rawProject = url.searchParams.get('project');
+    const project = rawProject ? parseProject(rawProject) : undefined;
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 100);
+    return json(await searchNotes(env.DB, store, owner, terms, { project, limit }));
   }
 
   if (path === '/v1/projects' && m === 'GET') {
@@ -172,7 +214,7 @@ async function route(req: Request, env: Env, url: URL, userId: string, owner: Ow
 
   if (path === '/v1/files/move' && m === 'POST') {
     const b = await body(req);
-    return json(await move(store, owner, b.from, b.to));
+    return json(await move(store, env.DB, owner, b.from, b.to));
   }
 
   return null;
@@ -182,7 +224,7 @@ async function route(req: Request, env: Env, url: URL, userId: string, owner: Ow
  * R2 has no rename: copy then delete. A file moves alone; a folder moves with
  * everything under it. Copies are byte-exact, so attachments survive a move.
  */
-async function move(store: Store, owner: Owner, from: unknown, to: unknown) {
+async function move(store: Store, db: D1Database, owner: Owner, from: unknown, to: unknown) {
   const isFile = typeof from === 'string' && isStorableFile(from);
   const pairs: [string, string, string][] = [];
   const projects = new Set<string>();
@@ -217,6 +259,8 @@ async function move(store: Store, owner: Owner, from: unknown, to: unknown) {
     if (!(await store.copy(owner, src, dest, contentType))) continue;
     await store.delete(owner, src);
   }
+  if (isFile) await moveStars(db, owner, pairs[0]![0], pairs[0]![1], true);
+  else await moveStars(db, owner, parseFolderPath(from).rel, parseFolderPath(to).rel, false);
   for (const project of projects) await store.compileIndex(owner, project);
   return { ok: true, moved: pairs.length };
 }

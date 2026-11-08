@@ -48,3 +48,22 @@ refresh tokens. Only public clients with S256 PKCE and exact-match https/loopbac
 form is protected by an HttpOnly cookie plus a CSRF token. Static agent tokens remain supported. OAuth stays off until
 `COGNITO_DOMAIN` and `OAUTH_COGNITO_CLIENT_ID` are set. Limits: the client registry is capped (5000) rather than rate limited,
 and expired rows are purged opportunistically on `/authorize`.
+
+## 8. Search and stars for the user's clients (D1 derived state)
+**Search** is D1 FTS5 (`note_index` + `note_fts`, migration 0006), per owner (a user's space or a team's) and behind the same
+role check as reads. R2 stays the source of truth; the index is a derived copy that can be dropped at any time. Instead of
+hooking every write path (clients, agents, folder moves, project transfers), each search first reconciles the index with the R2
+listing (path + etag, no body reads): changed notes are re-read and indexed, deleted ones dropped. So the index is always correct,
+at the cost of one R2 list per search (fine for thousands of notes; past ~50k notes per owner, track changes by timestamp
+instead). A never-indexed space is indexed at most 100 notes per search and the response says `truncated`. Queries are quoted
+prefix tokens (no FTS syntax injection) and are confined to one owner's rows by a per-owner token plus an exact `owner` filter.
+Rows are deleted with the account or the team. Not covered: substring matching (token/prefix only), agents (no MCP search tool
+yet), semantic search.
+
+**Stars** (`starred`, migration 0007) are per user and span the user's own space and their teams': a viewer can star a team
+note, nobody sees anyone else's stars, and starring moves the caller's own change cursor, never the team's. They are D1 rows
+keyed by (owner, path), not R2 metadata, which a move or overwrite would lose. Moves through the files API carry the star along;
+every listing prunes stars whose note is gone (one R2 listing per starred owner), which covers deletes by clients and agents,
+project deletes and transfers. A project renamed through the MCP tool, or transferred to a team, loses its stars (no hook there).
+Stars of a team the user left are hidden. Limit 500 per user.
+

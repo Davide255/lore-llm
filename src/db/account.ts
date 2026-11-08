@@ -1,3 +1,6 @@
+import { clearIndex } from './searchIndex';
+import { deleteUserStars } from './stars';
+
 /**
  * Removes every D1 row that belongs to a user: agents (and the OAuth codes and
  * refresh tokens issued to them), the audit log, in-flight OAuth requests, the
@@ -25,6 +28,8 @@ export async function deleteUserRows(db: D1Database, userId: string): Promise<vo
   await db.prepare('DELETE FROM audit_logs WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM permissions WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM space_versions WHERE user_id = ?').bind(userId).run();
+  await clearIndex(db, userId);
+  await deleteUserStars(db, userId);
   const email = 'SELECT email FROM users WHERE id = ?';
   await db.prepare(`DELETE FROM invites WHERE invited_by = ? OR email = (${email})`).bind(userId, userId).run();
   await db.prepare('DELETE FROM shares WHERE created_by = ? OR grantee_user_id = ?').bind(userId, userId).run();

@@ -1,3 +1,5 @@
+import { clearIndex } from './searchIndex';
+import { deleteOwnerStars } from './stars';
 export type TeamRole = 'owner' | 'editor' | 'viewer';
 export type InviteStatus = 'pending' | 'accepted' | 'declined' | 'revoked';
 
@@ -66,11 +68,13 @@ export async function renameTeam(db: D1Database, teamId: string, name: string): 
   return changed(await db.prepare('UPDATE teams SET name = ? WHERE id = ?').bind(name, teamId).run());
 }
 
-/** Members, invites and the change cursor go with the team. The caller makes sure no files are left. */
+/** Members, invites, the change cursor, the search index and stars go with the team. The caller makes sure no files are left. */
 export async function deleteTeam(db: D1Database, teamId: string): Promise<boolean> {
   await db.prepare('DELETE FROM team_members WHERE team_id = ?').bind(teamId).run();
   await db.prepare('DELETE FROM invites WHERE team_id = ?').bind(teamId).run();
   await db.prepare('DELETE FROM space_versions WHERE user_id = ?').bind(`t:${teamId}`).run();
+  await clearIndex(db, `t:${teamId}`);
+  await deleteOwnerStars(db, `t:${teamId}`);
   return changed(await db.prepare('DELETE FROM teams WHERE id = ?').bind(teamId).run());
 }
 
