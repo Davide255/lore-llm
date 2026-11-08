@@ -57,8 +57,10 @@ listing (path + etag, no body reads): changed notes are re-read and indexed, del
 at the cost of one R2 list per search (fine for thousands of notes; past ~50k notes per owner, track changes by timestamp
 instead). A never-indexed space is indexed at most 100 notes per search and the response says `truncated`. Queries are quoted
 prefix tokens (no FTS syntax injection) and are confined to one owner's rows by a per-owner token plus an exact `owner` filter.
-Rows are deleted with the account or the team. Not covered: substring matching (token/prefix only), agents (no MCP search tool
-yet), semantic search.
+Rows are deleted with the account or the team. The MCP tool `search_files` uses the same index (it used to read
+every file on each call): an agent's project scope is applied inside the query, results are ranked with a snippet and line
+number, and a `note` entry says when the index is still being built. Not covered: substring matching (token/prefix only),
+semantic search.
 
 **Stars** (`starred`, migration 0007) are per user and span the user's own space and their teams': a viewer can star a team
 note, nobody sees anyone else's stars, and starring moves the caller's own change cursor, never the team's. They are D1 rows

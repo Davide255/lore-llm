@@ -142,7 +142,7 @@ async function route(req: Request, env: Env, url: URL, userId: string, owner: Ow
     const rawProject = url.searchParams.get('project');
     const project = rawProject ? parseProject(rawProject) : undefined;
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 100);
-    return json(await searchNotes(env.DB, store, owner, terms, { project, limit }));
+    return json(await searchNotes(env.DB, store, owner, terms, { projects: project ? [project] : undefined, limit }));
   }
 
   if (path === '/v1/projects' && m === 'GET') {

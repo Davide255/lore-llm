@@ -63,21 +63,25 @@ export async function searchNotes(
   store: Store,
   owner: Owner,
   terms: string[],
-  opts: { project?: string; limit?: number } = {},
+  opts: { projects?: string[]; limit?: number } = {},
 ): Promise<SearchResult> {
   const pending = await reconcileIndex(db, store, owner);
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), MAX_LIMIT);
-  const prefix = opts.project ? `${opts.project}/` : '';
+  // Restrict to some projects (a project filter, or an agent's scope) inside the query, so `limit` applies to what the caller may see.
+  const prefixes = opts.projects?.map((p) => `${p}/`);
+  if (prefixes?.length === 0) return { hits: [], scanned: 0, truncated: false };
+  const inScope = prefixes ? ` AND (${prefixes.map(() => 'substr(n.path, 1, ?) = ?').join(' OR ')})` : '';
+  const scopeBinds = (prefixes ?? []).flatMap((p) => [p.length, p]);
   const match = `tok:"${tokenOf(owner)}" AND (${ftsTerms(terms)})`;
 
   const { results } = await db
     .prepare(
       `SELECT n.path AS path, substr(n.body, 1, ${SNIPPET_SOURCE_CHARS}) AS head, -bm25(note_fts, 0, 5, 1, 3) AS score ` +
         'FROM note_fts JOIN note_index n ON n.id = note_fts.rowid ' +
-        'WHERE note_fts MATCH ? AND n.owner = ? AND substr(n.path, 1, ?) = ? ' +
+        `WHERE note_fts MATCH ? AND n.owner = ?${inScope} ` +
         'ORDER BY score DESC, n.path LIMIT ?',
     )
-    .bind(match, owner, prefix.length, prefix, limit)
+    .bind(match, owner, ...scopeBinds, limit)
     .all<{ path: string; head: string; score: number }>();
 
   const hits: SearchHit[] = results.map((r) => {

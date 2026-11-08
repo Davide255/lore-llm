@@ -2,8 +2,10 @@ import * as cl from './checklist';
 import { insertAudit, type AuditAction } from '../db/audit';
 import { bumpVersion } from '../db/version';
 import type { AgentContext } from '../env';
-import { scopeAllows } from '../permissions/scope';
+import { searchNotes } from '../db/searchIndex';
+import { parseScope, scopeAllows } from '../permissions/scope';
 import { PathError, isMarkdown, parseFolder, parsePath, parseProject } from '../storage/paths';
+import { parseQuery } from '../storage/search';
 import type { Store } from '../storage/store';
 
 /** A failure the agent should see as a normal tool result (isError), not a protocol error. */
@@ -237,34 +239,47 @@ export const tools: ToolDef[] = [
   },
   {
     name: 'search_files',
-    description: 'Search a keyword or phrase (case-insensitive) in all markdown files of the projects this agent can access, optionally only in one project.',
+    description:
+      'Full-text search over the markdown files of the projects this agent can access, optionally only in one project. ' +
+      'Every word of the query must appear (anywhere in the file or its path); words match as prefixes ("drag" finds "dragon"); ' +
+      'case and accents are ignored. Results are ranked by relevance, best first, each with a snippet and its line number. ' +
+      'Use read_file_lines to open the matching lines.',
     inputSchema: {
       type: 'object',
-      properties: { query: { type: 'string' }, project: { type: 'string', description: 'Optional: search only this project.' } },
+      properties: {
+        query: { type: 'string', description: 'Words to find, e.g. "pricing decision".' },
+        project: { type: 'string', description: 'Optional: search only this project.' },
+        limit: { type: 'integer', minimum: 1, maximum: MAX_SEARCH_RESULTS, description: `Max results (default ${MAX_SEARCH_RESULTS}).` },
+      },
       required: ['query'],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true },
     async run(args, c) {
-      const query = str(args, 'query').toLowerCase();
-      if (query === '') throw new ToolError('"query" must not be empty.');
+      const raw = str(args, 'query');
+      const terms = parseQuery(raw);
+      if (terms.length === 0) throw new ToolError('"query" must not be empty.');
+      const limit = args.limit === undefined ? MAX_SEARCH_RESULTS : Math.min(intArg(args, 'limit'), MAX_SEARCH_RESULTS);
+      // The agent's scope is applied inside the query: '*' means every project.
+      const scope = parseScope(c.agent.projectScope);
       const projects =
-        args.project === undefined
-          ? (await c.store.listProjects(c.agent.userId)).filter((p) => scopeAllows(c.agent.projectScope, p))
-          : [projectArg(args, c)];
-      const results: { path: string; snippet: string }[] = [];
-      for (const project of projects) {
-        for (const f of await c.store.listFiles(c.agent.userId, project)) {
-          if (!isMarkdown(f.path) || f.path.toLowerCase() === 'index.md') continue;
-          const content = await c.store.read(c.agent.userId, `${project}/${f.path}`);
-          const idx = content?.toLowerCase().indexOf(query) ?? -1;
-          if (content === null || idx === -1) continue;
-          results.push({ path: `${project}/${f.path}`, snippet: content.slice(Math.max(0, idx - 150), idx + 300).trim() });
-          if (results.length >= MAX_SEARCH_RESULTS) break;
-        }
-        if (results.length >= MAX_SEARCH_RESULTS) break;
+        args.project !== undefined
+          ? [projectArg(args, c)]
+          : scope.includes('*')
+            ? undefined
+            : scope.map((s) => s.slice(0, -2));
+      const res = await searchNotes(c.db, c.store, c.agent.userId, terms, { projects, limit });
+      if (res.hits.length === 0 && !res.truncated) return `No results for: "${raw}"`;
+      const out: Record<string, unknown>[] = res.hits.map((h) => ({
+        path: h.path,
+        snippet: h.snippets[0]?.text ?? '',
+        line: h.snippets[0]?.line,
+        score: h.score,
+      }));
+      if (res.truncated) {
+        out.push({ note: 'The search index is still being built for a large knowledge base: repeat the search to include the remaining files.' });
       }
-      return results.length === 0 ? `No results for: "${str(args, 'query')}"` : JSON.stringify(results);
+      return JSON.stringify(out);
     },
   },
   {

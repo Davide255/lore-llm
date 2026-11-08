@@ -102,6 +102,53 @@ describe('MCP protocol', () => {
   });
 });
 
+describe('search_files tool (indexed)', () => {
+  it('ranks, gives snippets with lines, follows agent writes and applies the agent scope', async () => {
+    const rw = (await newAgent('u1', '*', 'read_write')).token;
+    await tool(rw, 'write_file', { path: 'Alpha/a.md', content: '# Alpha\nThe Dragon sleeps\nnothing' });
+    await tool(rw, 'write_file', { path: 'Alpha/dragon-notes.md', content: 'unrelated body' });
+    await tool(rw, 'write_file', { path: 'Beta/b.md', content: 'dragon and treasure' });
+    const search = async (token: string, args: Record<string, unknown>) => {
+      const r = await tool(token, 'search_files', args);
+      return r.text.startsWith('[') ? (JSON.parse(r.text) as any[]) : r;
+    };
+
+    const all = (await search(rw, { query: 'drag' })) as any[]; // prefix, case-insensitive
+    expect(all[0].path).toBe('Alpha/dragon-notes.md'); // path match ranks first
+    expect(all.map((h) => h.path).sort()).toEqual(['Alpha/a.md', 'Alpha/dragon-notes.md', 'Beta/b.md']);
+    expect(all.find((h) => h.path === 'Alpha/a.md')).toMatchObject({ snippet: 'The Dragon sleeps', line: 2 });
+    expect(((await search(rw, { query: 'dragon treasure' })) as any[]).map((h) => h.path)).toEqual(['Beta/b.md']); // all words
+    expect(((await search(rw, { query: 'dragon', project: 'Alpha' })) as any[]).map((h) => h.path).sort()).toEqual(['Alpha/a.md', 'Alpha/dragon-notes.md']);
+    expect(((await search(rw, { query: 'dragon', limit: 1 })) as any[])).toHaveLength(1);
+    expect((await tool(rw, 'search_files', { query: '   ' })).isError).toBe(true);
+    expect((await tool(rw, 'search_files', { query: 'dragon', limit: 0 })).isError).toBe(true);
+
+    // The index follows what the agent writes and deletes.
+    await tool(rw, 'append_file', { path: 'Beta/b.md', content: '\nand a wyvern' });
+    expect(((await search(rw, { query: 'wyvern' })) as any[]).map((h) => h.path)).toEqual(['Beta/b.md']);
+    await tool(rw, 'delete_file', { path: 'Beta/b.md' });
+    expect((await search(rw, { query: 'wyvern' })) as any).toMatchObject({ text: expect.stringContaining('No results') });
+
+    // Scope: a read-only agent limited to Alpha only sees Alpha, and cannot ask for Beta.
+    await tool(rw, 'write_file', { path: 'Beta/c.md', content: 'dragon in beta' });
+    const ro = (await newAgent('u1', 'Alpha/*', 'read_only')).token;
+    expect(((await search(ro, { query: 'dragon' })) as any[]).every((h) => h.path.startsWith('Alpha/'))).toBe(true);
+    expect((await tool(ro, 'search_files', { query: 'dragon', project: 'Beta' })).isError).toBe(true);
+    // Another user's files are never found.
+    const other = (await newAgent('u2', '*', 'read_only')).token;
+    expect((await tool(other, 'search_files', { query: 'dragon' })).text).toContain('No results');
+  });
+
+  it('says when a large knowledge base is still being indexed', async () => {
+    const { token } = await newAgent('u1', '*', 'read_only');
+    for (let i = 0; i < 105; i++) bucket.objects.set(`u1/Big/n${i}.md`, { bytes: enc.encode('needle'), etag: `e${i}`, uploaded: new Date() });
+    const first = JSON.parse((await tool(token, 'search_files', { query: 'needle' })).text) as any[];
+    expect(first.at(-1).note).toContain('still being built');
+    const again = JSON.parse((await tool(token, 'search_files', { query: 'needle' })).text) as any[];
+    expect(again.some((h) => 'note' in h)).toBe(false);
+  });
+});
+
 describe('lines, search and patch tools', () => {
   it('reads line ranges, searches and patches', async () => {
     const { token } = await newAgent('u1', '*', 'read_write');
