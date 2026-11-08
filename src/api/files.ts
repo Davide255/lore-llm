@@ -5,7 +5,7 @@ import { bumpVersion, getVersion, getVersions } from '../db/version';
 import type { Env } from '../env';
 import { canRead, canWrite, resolveAccess } from '../permissions/access';
 import { parseOwner, teamOwner, userOwner, type Owner } from '../storage/owner';
-import { PathError, isStorableFile, parseFolder, parsePath, parseProject } from '../storage/paths';
+import { PathError, isMarkdown, isStorableFile, parseFolder, parsePath, parseProject } from '../storage/paths';
 import { parseQuery } from '../storage/search';
 import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
 
@@ -23,8 +23,9 @@ import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
  *   GET    /v1/search?q=a+b[&project=P&limit=N]  full-text search over the owner's notes: every term (prefix match) must appear;
  *                                         ranked by BM25 (D1 FTS5); {hits:[{path,score,pathMatch,snippets:[{line,text}]}], scanned, truncated};
  *                                         truncated = some notes are not indexed yet, search again for complete results
- *   GET    /v1/stars                      the caller's starred notes across their own space and their teams': {stars:[{owner,path,starred_at}]}
- *   PUT    /v1/stars?owner=&path=P/a.md   star a note (idempotent; the note must exist; read access is enough)
+ *   GET    /v1/stars                      the caller's starred notes and projects across their own space and their teams':
+ *                                         {stars:[{owner,path,kind:'note'|'project',starred_at}]}
+ *   PUT    /v1/stars?owner=&path=P/a.md   star a note, or a whole project with path=P (idempotent; it must exist; read access is enough)
  *   DELETE /v1/stars?owner=&path=P/a.md   unstar
  *   GET    /v1/version                    {version, updated_at, scopes}: bumped on every change to the owner's files, by anyone;
  *                                         without ?owner, `scopes` holds the cursors of the caller's teams, keyed `t:<teamId>`
@@ -108,15 +109,25 @@ async function handleStars(req: Request, env: Env, url: URL, userId: string, own
   if (req.method === 'GET') return json({ stars: await listStars(env.DB, store, userId) });
   if (req.method !== 'PUT' && req.method !== 'DELETE') return json({ error: 'Method not allowed' }, 405);
   if (!canRead(await resolveAccess(env.DB, userId, owner))) return json({ error: 'Forbidden' }, 403);
-  const p = parsePath(url.searchParams.get('path'));
-  rejectIndex(p.isIndex);
+  // A note ("Project/a.md") or a whole project ("Project").
+  const raw = url.searchParams.get('path');
+  if (raw === null || raw === '') throw new PathError('path is required');
+  let rel: string;
+  if (isMarkdown(raw)) {
+    const p = parsePath(raw);
+    rejectIndex(p.isIndex);
+    rel = p.rel;
+  } else {
+    rel = parseProject(raw);
+  }
   if (req.method === 'DELETE') {
-    const removed = await unstar(env.DB, userId, owner, p.rel);
+    const removed = await unstar(env.DB, userId, owner, rel);
     if (removed) await bumpVersion(env.DB, userId).catch((err) => console.error('version bump failed', String(err)));
     return json({ ok: true, removed });
   }
-  if (!(await store.exists(owner, p.rel))) return json({ error: 'Not found' }, 404);
-  if (!(await addStar(env.DB, userId, owner, p.rel))) throw new PathError(`Too many starred notes (max ${MAX_STARS})`);
+  const exists = rel.includes('/') ? await store.exists(owner, rel) : (await store.listProjects(owner)).includes(rel);
+  if (!exists) return json({ error: 'Not found' }, 404);
+  if (!(await addStar(env.DB, userId, owner, rel))) throw new PathError(`Too many starred items (max ${MAX_STARS})`);
   await bumpVersion(env.DB, userId).catch((err) => console.error('version bump failed', String(err)));
   return json({ ok: true });
 }

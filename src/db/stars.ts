@@ -2,9 +2,10 @@ import type { Owner } from '../storage/owner';
 import type { Store } from '../storage/store';
 
 /**
- * Starred notes: per user, across the spaces they can read (their own and their
- * teams'). R2 object metadata would be lost on every overwrite or move, so stars
- * live in D1, keyed by (owner, path).
+ * Starred notes and projects: per user, across the spaces they can read (their
+ * own and their teams'). A star's path is a note (`Project/a.md`) or a project
+ * (`Project`, never contains `/`). R2 object metadata would be lost on every
+ * overwrite or move, so stars live in D1, keyed by (owner, path).
  *
  * Keeping them true: moves made through the files API carry the star along
  * (`moveStars`); every listing prunes stars whose note no longer exists
@@ -15,8 +16,12 @@ import type { Store } from '../storage/store';
 export interface Star {
   owner: Owner;
   path: string;
+  kind: 'note' | 'project';
   starred_at: string;
 }
+
+type StarRow = Omit<Star, 'kind'>;
+const kindOf = (path: string): Star['kind'] => (path.includes('/') ? 'note' : 'project');
 
 export const MAX_STARS = 500;
 
@@ -29,21 +34,23 @@ export async function listStars(db: D1Database, store: Store, userId: string): P
   const owners = [...new Set(rows.map((r) => r.owner))];
   const dead = new Set<string>();
   for (const owner of owners) {
-    const live = new Set((await store.listAllFiles(owner)).map((f) => f.path));
+    // A note is live while its file exists, a project while it has any file.
+    const files = await store.listAllFiles(owner);
+    const live = new Set([...files.map((f) => f.path), ...files.map((f) => f.path.split('/')[0]!)]);
     for (const r of rows) if (r.owner === owner && !live.has(r.path)) dead.add(`${r.owner}\0${r.path}`);
   }
   for (const key of dead) {
     const [owner, path] = key.split('\0') as [string, string];
     await db.prepare('DELETE FROM starred WHERE user_id = ? AND owner = ? AND path = ?').bind(userId, owner, path).run();
   }
-  return rows.filter((r) => !dead.has(`${r.owner}\0${r.path}`));
+  return rows.filter((r) => !dead.has(`${r.owner}\0${r.path}`)).map((r) => ({ ...r, kind: kindOf(r.path) }));
 }
 
-async function readStars(db: D1Database, userId: string): Promise<Star[]> {
+async function readStars(db: D1Database, userId: string): Promise<StarRow[]> {
   const { results } = await db
     .prepare(`SELECT owner, path, created_at AS starred_at FROM starred WHERE ${VISIBLE} ORDER BY created_at DESC, path`)
     .bind(userId, userId, userId)
-    .all<Star>();
+    .all<StarRow>();
   return results;
 }
 
@@ -64,11 +71,17 @@ export async function unstar(db: D1Database, userId: string, owner: Owner, path:
   return (r.meta?.changes ?? 0) > 0;
 }
 
-/** A file moved from `from` to `to`, or a folder `from/` to `to/`, inside one owner: every user's stars follow. */
+/**
+ * A file moved from `from` to `to`, or a folder (`from/` to `to/`, a project when it has no `/`), inside one owner:
+ * every user's stars follow. A project renamed to a name keeps its own star; moved into a folder it is dropped.
+ */
 export async function moveStars(db: D1Database, owner: Owner, from: string, to: string, isFile: boolean): Promise<void> {
   if (isFile) {
     await db.prepare('UPDATE starred SET path = ? WHERE owner = ? AND path = ?').bind(to, owner, from).run();
     return;
+  }
+  if (!from.includes('/') && !to.includes('/')) {
+    await db.prepare('UPDATE starred SET path = ? WHERE owner = ? AND path = ?').bind(to, owner, from).run();
   }
   const src = `${from}/`;
   await db

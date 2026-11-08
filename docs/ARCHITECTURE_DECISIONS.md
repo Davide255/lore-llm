@@ -62,10 +62,11 @@ every file on each call): an agent's project scope is applied inside the query, 
 number, and a `note` entry says when the index is still being built. Not covered: substring matching (token/prefix only),
 semantic search.
 
-**Stars** (`starred`, migration 0007) are per user and span the user's own space and their teams': a viewer can star a team
-note, nobody sees anyone else's stars, and starring moves the caller's own change cursor, never the team's. They are D1 rows
-keyed by (owner, path), not R2 metadata, which a move or overwrite would lose. Moves through the files API carry the star along;
-every listing prunes stars whose note is gone (one R2 listing per starred owner), which covers deletes by clients and agents,
-project deletes and transfers. A project renamed through the MCP tool, or transferred to a team, loses its stars (no hook there).
+**Stars** (`starred`, migration 0007) are per user, cover notes and whole projects (a path with no `/` is a project), and span
+the user's own space and their teams': a viewer can star a team note or project, nobody sees anyone else's stars, and starring moves the caller's own change cursor, never the team's. They are D1 rows
+keyed by (owner, path), not R2 metadata, which a move or overwrite would lose. Moves through the files API and the MCP `rename_project` carry the stars along (a
+project renamed keeps its own star; moved into a folder it is no longer a project and loses it); every listing prunes stars whose
+note or project is gone (one R2 listing per starred owner), which covers deletes by clients and agents. A project transferred to
+a team loses its stars (no hook there).
 Stars of a team the user left are hidden. Limit 500 per user.
 

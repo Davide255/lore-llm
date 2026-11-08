@@ -77,6 +77,25 @@ beforeEach(async () => {
 afterEach(() => vi.unstubAllGlobals());
 
 
+
+async function newAgent(who: string, scope: string, level: string) {
+  const res = await api(who, 'POST', '/v1/agents', { name: 'bot', project_scope: scope, access_level: level });
+  expect(res.status).toBe(201);
+  return res.body as { token: string };
+}
+async function tool(token: string, name: string, args: unknown) {
+  const res = await worker.fetch(
+    new Request('https://x.test/mcp', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+    }),
+    env,
+    makeCtx().ctx,
+  );
+  return (await res.json()) as any;
+}
+
 const q = (who: string, qs: string) => api(who, 'GET', `/v1/search?${qs}`);
 const star = (who: string, owner: string, path: string, method = 'PUT') =>
   api(who, method, `/v1/stars?owner=${encodeURIComponent(owner)}&path=${encodeURIComponent(path)}`);
@@ -165,6 +184,48 @@ describe('stars', () => {
     await star('alice', 'alice', 'Alpha/moved/b.md', 'DELETE');
     expect(await stars('alice')).toEqual([]);
     expect((await api('alice', 'GET', '/v1/version')).body.version).toBeGreaterThan(v1); // devices resync
+  });
+
+  it('stars whole projects: kind, validation, renames, pruning, team viewers', async () => {
+    const id = await newTeam('alice');
+    await join(id, 'vw', 'viewer');
+    await put('alice', 'alice', 'Alpha/a.md', 'x');
+    await put('alice', 'alice', 'Beta/b.md', 'x');
+    await put('alice', `t:${id}`, 'Shared/t.md', 'x');
+
+    expect((await star('alice', 'alice', 'Nope')).status).toBe(404);
+    expect((await star('alice', 'alice', 'Alpha/sub')).status).toBe(400); // neither a note nor a project name
+    expect((await star('alice', 'alice', '../x')).status).toBe(400);
+    expect((await api('alice', 'PUT', '/v1/stars')).status).toBe(400);
+    expect((await star('alice', 'alice', 'Alpha')).status).toBe(200);
+    expect((await star('alice', 'alice', 'Alpha')).status).toBe(200); // idempotent
+    expect((await star('alice', 'alice', 'Beta')).status).toBe(200);
+    expect((await star('alice', 'alice', 'Beta/b.md')).status).toBe(200); // a project and its note are separate stars
+    const list = (await api('alice', 'GET', '/v1/stars')).body.stars;
+    expect(list.map((x: any) => `${x.path}:${x.kind}`).sort()).toEqual(['Alpha:project', 'Beta/b.md:note', 'Beta:project']);
+
+    // Renaming a project (files API) moves its own star and its notes' stars.
+    await api('alice', 'POST', '/v1/files/move', { from: 'Beta', to: 'Gamma' });
+    expect(await stars('alice')).toEqual(['alice|Alpha', 'alice|Gamma', 'alice|Gamma/b.md']);
+    // Moving it inside another project drops the project star (it is no longer a project).
+    await api('alice', 'POST', '/v1/files/move', { from: 'Gamma', to: 'Alpha/gamma' });
+    expect(await stars('alice')).toEqual(['alice|Alpha', 'alice|Alpha/gamma/b.md']);
+
+    // Renaming through the MCP tool keeps the star too.
+    const { token } = await newAgent('alice', '*', 'read_write');
+    await tool(token, 'rename_project', { project: 'Alpha', newName: 'Omega' });
+    expect(await stars('alice')).toEqual(['alice|Omega', 'alice|Omega/gamma/b.md']);
+
+    // Deleting the project (any route) prunes its star.
+    await api('alice', 'DELETE', '/v1/folder?path=Omega');
+    expect(await stars('alice')).toEqual([]);
+
+    // A viewer can star a team project; losing membership hides it.
+    expect((await star('vw', `t:${id}`, 'Shared')).status).toBe(200);
+    expect(await stars('vw')).toEqual([`t:${id}|Shared`]);
+    expect((await star('bob', `t:${id}`, 'Shared')).status).toBe(403);
+    await api('alice', 'DELETE', `/v1/teams/${id}/members/vw`);
+    expect(await stars('vw')).toEqual([]);
   });
 
   it('lets a viewer star team notes without touching the team cursor, per user', async () => {

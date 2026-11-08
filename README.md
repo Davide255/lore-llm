@@ -109,7 +109,7 @@ Enable it (off by default, `/oauth/*` is 404 until both are set):
 | `GET/PUT /v1/blob?path=` | raw attachment bytes (png, jpg, gif, webp, svg, pdf; ≤ 10 MiB); `?overwrite=1`, `If-Match`, `x-lore-etag` |
 | `DELETE /v1/folder?path=` · `POST /v1/files/move` | delete a folder · move a file or folder (byte-exact) |
 | `GET /v1/search?q=&project=&limit=` | full-text search over the owner's notes (prefix match, all terms, BM25 ranked, snippets); needs read access; `truncated` = still indexing, search again |
-| `GET /v1/stars` · `PUT/DELETE /v1/stars?owner=&path=` | the caller's starred notes across their own space and their teams' · star · unstar; read access is enough, stars are private to each user and follow moves |
+| `GET /v1/stars` · `PUT/DELETE /v1/stars?owner=&path=` | the caller's starred notes **and projects** (`path=Project/a.md` or `path=Project`; each star has `kind: note\|project`) across their own space and their teams' · star · unstar; read access is enough, stars are private to each user and follow moves and renames |
 | `GET /v1/version` | change cursor, bumped on every file change by anyone (clients poll it); without `?owner`, `scopes` holds the cursor of each of the caller's teams |
 | `?owner=t:<teamId>` on any file route | act on a team's files instead of your own; viewers read, editors and owners write, others get 403 |
 | `GET/POST /v1/teams` · `GET/PATCH/DELETE /v1/teams/:id` | your teams (role included) · create (you become owner) · team details · rename · delete (only when it has no files) |

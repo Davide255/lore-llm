@@ -3,6 +3,7 @@ import { insertAudit, type AuditAction } from '../db/audit';
 import { bumpVersion } from '../db/version';
 import type { AgentContext } from '../env';
 import { searchNotes } from '../db/searchIndex';
+import { moveStars } from '../db/stars';
 import { parseScope, scopeAllows } from '../permissions/scope';
 import { PathError, isMarkdown, parseFolder, parsePath, parseProject } from '../storage/paths';
 import { parseQuery } from '../storage/search';
@@ -467,6 +468,7 @@ export const tools: ToolDef[] = [
       const to = projectArg(args, c, 'newName', true);
       if (from === to) throw new ToolError('The new name is the same as the current one.');
       const moved = await c.store.renameProject(c.agent.userId, from, to);
+      await moveStars(c.db, c.agent.userId, from, to, false).catch((err) => console.error('move stars failed', String(err)));
       await afterModification(c, to, 'CREATE', `${to}/`);
       c.waitUntil(
         insertAudit(c.db, { userId: c.agent.userId, agentId: c.agent.agentId, action: 'DELETE', targetPath: `${from}/` }).catch((err) =>
