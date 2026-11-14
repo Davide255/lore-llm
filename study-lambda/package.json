@@ -1,0 +1,26 @@
+{
+  "name": "lore-llm-study",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lore LLM study mode: AWS Lambda (Function URL, response streaming) that generates quiz questions from a project's notes and grades the answers",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/handler.mjs --minify --external:@aws-sdk/* --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "deploy": "npm run build && sam deploy"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "aws-jwt-verify": "^5.2.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-ssm": "^3.1169.0",
+    "@types/aws-lambda": "^8.10.164",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

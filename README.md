@@ -119,6 +119,26 @@ Enable it (off by default, `/oauth/*` is 404 until both are set):
 | `POST /v1/projects/:p/move-to-team` | `{team_id}`: move a personal project into a team you can write to |
 | `DELETE /v1/account` | permanently delete the caller's files, agents, audit log, memberships, invites and shares, and (if `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` secrets allow `cognito-idp:AdminDeleteUser`) their Cognito user; refused with 409 while they are the only owner of a team |
 
+## Study mode (AWS Lambda)
+The mobile app's "Studio" tab — quiz questions generated from a project's notes (`.md`, PDF, photos), graded against the
+user's weighted criteria, report saved as `<project>/studio/<date>-<topic>.md` — runs on a separate Lambda in
+[`study-lambda/`](study-lambda), not in this Worker. It streams server-sent events from a Function URL and reads/writes the
+knowledge base only through the `/v1` routes above, with the caller's token. Contract: [`docs/STUDY_API.md`](docs/STUDY_API.md).
+
+| Route (Function URL) | |
+|---|---|
+| `POST /generate` | `{sources, mix: {mc, tf, open}, difficulty, citeSource, instructions}` → SSE `file`, `topics`, `question`…, `done` |
+| `POST /grade` | `{project, owner?, questions, answers, criteria, scale, …}` → SSE `graded`…, `result`, `saved`\|`save_failed`, `done` |
+
+Deploy (needs the [SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) and AWS credentials):
+```bash
+cd study-lambda && npm ci
+aws ssm put-parameter --region eu-north-1 --name /lore-llm/study/anthropic-api-key --type SecureString --value sk-ant-...
+npm run build && sam deploy --guided --region eu-north-1   # asks for LoreApiUrl (this Worker's URL)
+```
+The `StudyApiUrl` output goes into the mobile app as `EXPO_PUBLIC_STUDY_API_URL`. `npm test` runs its own suite (the Anthropic
+API and the Worker are faked); CI runs it in the `study-lambda` job but does not deploy it.
+
 ## Develop
 Setup and local run: see [Getting started](#getting-started). Tests fake R2 and D1 (D1 via `node:sqlite`).
 

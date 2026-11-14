@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Lore LLM study mode — generates quiz questions from a project's notes and grades
+  the answers, streamed (SSE) through a Lambda Function URL. Reads and writes the
+  knowledge base only through the lore-llm Worker, with the caller's Cognito token.
+
+# Deploy (see README "Study mode"):
+#   aws ssm put-parameter --region eu-north-1 --name /lore-llm/study/anthropic-api-key --type SecureString --value sk-ant-...
+#   npm run build && sam deploy --guided
+
+Parameters:
+  CognitoUserPoolId:
+    Type: String
+    Default: eu-north-1_orShbeG8H
+  CognitoClientIds:
+    Type: String
+    Description: Comma-separated app client ids allowed to call the study API (same list as the Worker's COGNITO_CLIENT_IDS)
+    Default: 97beb3qgebbmbqrnr0erhs37v,2ij9dpmj7gacqj370obj0lehg2,730nauiaj6dc4dfjdrfvrd7eak
+  LoreApiUrl:
+    Type: String
+    Description: Base URL of the lore-llm Worker, e.g. https://<name>.<account>.workers.dev
+  AnthropicKeyParameter:
+    Type: String
+    Description: Name of the SSM SecureString holding the Anthropic API key, without the leading slash
+    Default: lore-llm/study/anthropic-api-key
+  StudyModel:
+    Type: String
+    Default: claude-sonnet-5-5
+
+Resources:
+  StudyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: lore-llm-study
+      CodeUri: dist/
+      Handler: handler.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 1024
+      # Generation from large PDFs can take minutes; a streamed Function URL response may run up to 15 min.
+      Timeout: 600
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          COGNITO_CLIENT_IDS: !Ref CognitoClientIds
+          LORE_API_URL: !Ref LoreApiUrl
+          ANTHROPIC_API_KEY_PARAM: !Sub /${AnthropicKeyParameter}
+          STUDY_MODEL: !Ref StudyModel
+      # A SecureString under the AWS managed aws/ssm key needs no extra kms:Decrypt grant.
+      Policies:
+        - SSMParameterReadPolicy:
+            ParameterName: !Ref AnthropicKeyParameter
+      # The token is verified in code (aws-jwt-verify), like the Worker does: a Function URL can't use a Cognito authorizer.
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # Public Function URLs also need lambda:InvokeFunction granted for calls that come through the URL.
+  StudyFunctionUrlInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StudyFunction
+      Action: lambda:InvokeFunction
+      Principal: '*'
+      InvokedViaFunctionUrl: true
+
+  StudyLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${StudyFunction}
+      RetentionInDays: 30
+
+Outputs:
+  StudyApiUrl:
+    Description: Set it as EXPO_PUBLIC_STUDY_API_URL in the mobile app
+    Value: !GetAtt StudyFunctionUrl.FunctionUrl

@@ -25,6 +25,24 @@ jobs:
       - run: npm test
       - run: npx wrangler deploy --dry-run
 
+  # Study mode Lambda (separate package). Deployed by hand with SAM: AWS credentials are not in CI.
+  study-lambda:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: study-lambda
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: study-lambda/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
   deploy-dev:
     needs: test
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')

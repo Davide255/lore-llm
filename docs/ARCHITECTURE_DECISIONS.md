@@ -70,3 +70,16 @@ note or project is gone (one R2 listing per starred owner), which covers deletes
 a team loses its stars (no hook there).
 Stars of a team the user left are hidden. Limit 500 per user.
 
+## 9. Study mode on a separate AWS Lambda
+The study mode (questions generated from a project's notes, answers graded with the user's criteria) needs a language model, PDFs
+and photos of up to 10 MiB each, and responses that last minutes. It runs on an AWS Lambda (`study-lambda/`, Function URL with
+`InvokeMode: RESPONSE_STREAM`, SSE) instead of this Worker: the Worker is on the free plan (10 ms of CPU per request) and
+base64-encoding a large PDF for the model would exceed it, and the Worker stays dependency-free.
+
+The Lambda **never touches R2 or D1**. It verifies the Cognito token itself (same pool and app clients), then reads notes and
+attachments and writes the report through `GET /v1/file`, `GET /v1/blob` and `PUT /v1/file` with that same token. Team roles,
+`index.md`, the change cursor and the search index therefore behave exactly as for an app write, with no new code here; a
+viewer gets the grade but no saved report (`save_failed`). It is stateless: the questions, answer key included, travel to the app
+and come back at grading time — acceptable for a personal study tool, and it avoids a session store. The grade is computed by
+code from per-criterion scores the model gives; the model never does the arithmetic. Not covered: a per-user quota (any valid
+token can spend model calls, bounded only by the 12 files / 20 MB / 30 questions limits).
