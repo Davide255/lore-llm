@@ -130,13 +130,16 @@ knowledge base only through the `/v1` routes above, with the caller's token. Con
 | `POST /generate` | `{sources, mix: {mc, tf, open}, difficulty, citeSource, instructions}` → SSE `file`, `topics`, `question`…, `done` |
 | `POST /grade` | `{project, owner?, questions, answers, criteria, scale, …}` → SSE `graded`…, `result`, `saved`\|`save_failed`, `done` |
 
-Deploy (needs the [SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) and AWS credentials):
+The apps call it through this Worker, `POST /v1/study-mode/generate|grade` (`src/api/study.ts`), which forwards the caller's
+token and passes the event stream through; it answers 503 until `STUDY_LAMBDA_URL` is set in `wrangler.toml`.
+
+Deploy (AWS credentials; the Anthropic key is read at runtime from the SSM SecureString `/ai/anthropic-api-key`):
 ```bash
 cd study-lambda && npm ci
-aws ssm put-parameter --region eu-north-1 --name /lore-llm/study/anthropic-api-key --type SecureString --value sk-ant-...
-npm run build && sam deploy --guided --region eu-north-1   # asks for LoreApiUrl (this Worker's URL)
+LORE_API_URL=https://<your-worker>.workers.dev ./scripts/deploy.sh   # plain AWS CLI, idempotent
+# or, with CloudFormation: npm run build && sam deploy --guided --region eu-north-1
 ```
-The `StudyApiUrl` output goes into the mobile app as `EXPO_PUBLIC_STUDY_API_URL`. `npm test` runs its own suite (the Anthropic
+Then put the printed Function URL in `wrangler.toml` as `STUDY_LAMBDA_URL` and deploy the Worker. `npm test` runs its own suite (the Anthropic
 API and the Worker are faked); CI runs it in the `study-lambda` job but does not deploy it.
 
 ## Develop

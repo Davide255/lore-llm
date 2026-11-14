@@ -8,6 +8,13 @@ Cognito token**, so team roles, `index.md`, the change cursor and search apply
 exactly as for any other client write. Why a separate Lambda: see
 [ARCHITECTURE_DECISIONS §9](ARCHITECTURE_DECISIONS.md#9-study-mode-on-a-separate-aws-lambda).
 
+**The apps call the Worker, not the Lambda:** `POST /v1/study-mode/generate` and
+`POST /v1/study-mode/grade` on the usual API base URL (`src/api/study.ts`). The
+Worker checks the token, forwards body and token to `STUDY_LAMBDA_URL` and
+passes the event stream through unchanged (bodies ≤ 1 MB; 503 while
+`STUDY_LAMBDA_URL` is unset, 502 if the Lambda is unreachable). The routes below
+are the Lambda's own paths.
+
 The app keeps a copy of the types in `src/api/study/types.ts`; this file is the
 contract between the two. Change both together.
 
@@ -130,4 +137,7 @@ again, for at most 4 requests per call. The sources are prompt-cached.
 
 ## Deploy
 
-See the README, "Study mode".
+`study-lambda/scripts/deploy.sh` (plain AWS CLI, idempotent) or `sam deploy`
+(`template.yaml`). The Anthropic key is the SSM SecureString `/ai/anthropic-api-key`,
+read once per container. Then set `STUDY_LAMBDA_URL` in `wrangler.toml`. See the
+README, "Study mode".

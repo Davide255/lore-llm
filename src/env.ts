@@ -17,6 +17,8 @@ export interface Env {
    */
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
+  /** Base URL of the study Lambda's Function URL (study-lambda/). Unset: /v1/study-mode answers 503. */
+  STUDY_LAMBDA_URL?: string;
   /** Comma-separated allowed browser origins. */
   ALLOWED_ORIGINS?: string;
 }

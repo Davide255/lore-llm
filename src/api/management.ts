@@ -6,6 +6,7 @@ import { deleteUserRows, soleOwnedTeams } from '../db/account';
 import { listAudit } from '../db/audit';
 import { upsertUser } from '../db/users';
 import { handleFiles } from './files';
+import { handleStudy } from './study';
 import { handleTeams } from './teams';
 import { createAgent, deleteAgent, listAgents, updateAgent } from '../db/permissions';
 import type { Env } from '../env';
@@ -53,6 +54,9 @@ export async function handleManagement(req: Request, env: Env, url: URL): Promis
   try {
     const path = url.pathname;
     const m = req.method;
+
+    const study = await handleStudy(req, env, url, token);
+    if (study) return study;
 
     const files = await handleFiles(req, env, url, userId);
     if (files) return files;

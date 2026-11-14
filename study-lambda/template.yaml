@@ -6,8 +6,8 @@ Description: >
   knowledge base only through the lore-llm Worker, with the caller's Cognito token.
 
 # Deploy (see README "Study mode"):
-#   aws ssm put-parameter --region eu-north-1 --name /lore-llm/study/anthropic-api-key --type SecureString --value sk-ant-...
-#   npm run build && sam deploy --guided
+#   npm run build && sam deploy --guided          (or, without CloudFormation: scripts/deploy.sh)
+# The Anthropic key is read at runtime from the SSM SecureString /ai/anthropic-api-key.
 
 Parameters:
   CognitoUserPoolId:
@@ -23,7 +23,7 @@ Parameters:
   AnthropicKeyParameter:
     Type: String
     Description: Name of the SSM SecureString holding the Anthropic API key, without the leading slash
-    Default: lore-llm/study/anthropic-api-key
+    Default: ai/anthropic-api-key
   StudyModel:
     Type: String
     Default: claude-sonnet-5-5
@@ -73,5 +73,5 @@ Resources:
 
 Outputs:
   StudyApiUrl:
-    Description: Set it as EXPO_PUBLIC_STUDY_API_URL in the mobile app
+    Description: Set it as STUDY_LAMBDA_URL in the Worker (wrangler.toml [vars])
     Value: !GetAtt StudyFunctionUrl.FunctionUrl
