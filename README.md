@@ -106,7 +106,7 @@ Enable it (off by default, `/oauth/*` is 404 until both are set):
 | `GET /v1/projects` | one row per project `{name, file_count, size, updated_at, checklist: {path, etag, size, uploaded}\|null}` from a single listing: the home screen needs nothing more |
 | `GET /v1/files[?attachments=1&project=P]` | every note (and attachment, on request) with its etag; `project` limits it to one project, loaded when the user opens it |
 | `GET/PUT /v1/file?path=` · `DELETE /v1/file?path=` | read/write a note (`{content, overwrite?, if_match?}`) · delete a note or attachment |
-| `GET/PUT /v1/blob?path=` | raw attachment bytes (png, jpg, gif, webp, svg, pdf; ≤ 10 MiB); `?overwrite=1`, `If-Match`, `x-lore-etag` |
+| `GET/PUT /v1/blob?path=` | raw attachment bytes (png, jpg, gif, webp, svg, pdf); `?overwrite=1`, `If-Match`, `x-lore-etag` |
 | `DELETE /v1/folder?path=` · `POST /v1/files/move` | delete a folder · move a file or folder (byte-exact) |
 | `GET /v1/search?q=&project=&limit=` | full-text search over the owner's notes (prefix match, all terms, BM25 ranked, snippets); needs read access; `truncated` = still indexing, search again |
 | `GET /v1/stars` · `PUT/DELETE /v1/stars?owner=&path=` | the caller's starred notes **and projects** (`path=Project/a.md` or `path=Project`; each star has `kind: note\|project`) across their own space and their teams' · star · unstar; read access is enough, stars are private to each user and follow moves and renames |

@@ -2,7 +2,6 @@ import type { Owner } from './owner';
 import { MARKDOWN_TYPE, PathError, isMarkdown, objectKey } from './paths';
 
 export const MAX_FILE_BYTES = 1024 * 1024; // 1 MiB per markdown file
-export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MiB per attachment
 const APPEND_RETRIES = 4;
 /** R2 calls per request are limited; whole-project operations stay below this many files. */
 export const MAX_BATCH = 100;
@@ -177,7 +176,6 @@ export class Store {
     contentType: string,
     opts: { overwrite: boolean; ifMatch?: string },
   ): Promise<{ action: WriteAction; file: FileVersion }> {
-    if (bytes.byteLength > MAX_ATTACHMENT_BYTES) throw new PathError(`File too large (max ${MAX_ATTACHMENT_BYTES} bytes)`);
     const key = objectKey(owner, rel);
     const exists = (await this.bucket.head(key)) !== null;
     if (exists && !opts.overwrite) throw new PathError(`File already exists: ${rel}`);

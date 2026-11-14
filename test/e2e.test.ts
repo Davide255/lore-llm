@@ -419,7 +419,6 @@ describe('management API', () => {
     expect((await putBlob('Alpha/img/pic.png', png)).status).toBe(400); // no silent overwrite
     expect((await putBlob('Alpha/img/pic.png', new Uint8Array([1]), '&overwrite=1', { 'if-match': file.etag })).status).toBe(200);
     expect((await putBlob('Alpha/img/pic.png', new Uint8Array([2]), '&overwrite=1', { 'if-match': file.etag })).status).toBe(409);
-    expect((await putBlob('Alpha/big.pdf', new Uint8Array(10 * 1024 * 1024 + 1))).status).toBe(400);
     expect((await putBlob('Alpha/x.exe', png)).status).toBe(400);
     expect((await putBlob('Alpha/a.md', png)).status).toBe(400); // notes go through /v1/file
     expect((await call('/v1/file?path=Alpha/img/pic.png', { method: 'GET', token: owner })).status).toBe(400);

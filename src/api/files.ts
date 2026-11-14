@@ -7,7 +7,7 @@ import { canRead, canWrite, resolveAccess } from '../permissions/access';
 import { parseOwner, teamOwner, userOwner, type Owner } from '../storage/owner';
 import { PathError, isMarkdown, isStorableFile, parseFolder, parsePath, parseProject } from '../storage/paths';
 import { parseQuery } from '../storage/search';
-import { ConflictError, MAX_ATTACHMENT_BYTES, Store } from '../storage/store';
+import { ConflictError, Store } from '../storage/store';
 
 /**
  * File access for the user's own clients (desktop/mobile), authenticated with
@@ -203,8 +203,6 @@ async function route(req: Request, env: Env, url: URL, userId: string, owner: Ow
       });
     }
     if (m === 'PUT') {
-      const declared = Number(req.headers.get('content-length') ?? 0);
-      if (declared > MAX_ATTACHMENT_BYTES) throw new PathError(`File too large (max ${MAX_ATTACHMENT_BYTES} bytes)`);
       const ifMatch = req.headers.get('if-match') ?? undefined;
       const res = await store.saveBlob(owner, p.rel, await req.arrayBuffer(), p.contentType, {
         overwrite: url.searchParams.get('overwrite') === '1',
