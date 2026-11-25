@@ -36,7 +36,7 @@ with `done` or `error`.
 
 | Event | Data |
 |---|---|
-| `file` | `{ path, status: "loading"\|"ready"\|"skipped", kind: "markdown"\|"pdf"\|"image"\|"unsupported", bytes?, reason? }` |
+| `file` | `{ path, status: "loading"\|"ready"\|"skipped", kind: "markdown"\|"pdf"\|"image"\|"office"\|"unsupported", bytes?, reason? }` |
 | `topics` | `{ topics: string[] }` |
 | `question` | `{ question: Question, index, total }` |
 | `graded` | `QuestionResult` |
@@ -59,8 +59,14 @@ with `done` or `error`.
 ```
 
 Sources: `.md` notes (`GET /v1/file`), PDFs and png/jpg/gif/webp images
-(`GET /v1/blob`), read by the model directly — no OCR step. SVG is skipped. At
-most 12 files and 20 MB in total. Events: `file`×, `topics`, `question`×N, `done`.
+(`GET /v1/blob`), read by the model directly — no OCR step. Word, Excel and
+PowerPoint files (.docx, .xlsx, .pptx; not the legacy .doc/.xls/.ppt) are
+opened by the Lambda, which sends their text (headings, lists and tables of a
+document; every sheet row by row; every slide in order with its speaker notes)
+— embedded pictures are not read. Their `file` events have `kind: "office"`; a
+damaged file or one with no text is `skipped` with a reason. SVG is skipped. At
+most 12 files and 20 MB in total (for Office files, of extracted text). Events:
+`file`×, `topics`, `question`×N, `done`.
 
 ```ts
 type Question = { id: string; topic: string; prompt: string; source: { path; locator; excerpt } | null } & (

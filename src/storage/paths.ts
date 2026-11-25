@@ -14,7 +14,7 @@ const MAX_SEGMENT = 128;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 const PROJECT_RE = /^[\p{L}\p{N}][\p{L}\p{N} _.\-]{0,63}$/u;
 
-/** Binary files the user's own clients may store next to notes (images, PDFs). Agents only see markdown. */
+/** Binary files the user's own clients may store next to notes (images, PDFs, Office documents). Agents only see markdown. */
 export const ATTACHMENT_TYPES: Record<string, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -23,6 +23,9 @@ export const ATTACHMENT_TYPES: Record<string, string> = {
   webp: 'image/webp',
   svg: 'image/svg+xml',
   pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
 
 export const MARKDOWN_TYPE = 'text/markdown; charset=utf-8';
