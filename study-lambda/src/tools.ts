@@ -10,7 +10,7 @@ import type { Tool } from './model';
 const str = (description: string) => ({ type: 'string', description }) as const;
 const source = {
   source_path: str('Path of the note the question comes from, exactly as in the document title or "Foto: <path>" line.'),
-  source_locator: str('Where in that note: "p. 6", a heading, or an area of the photo. Empty if unknown.'),
+  source_locator: str('Where in that note: "p. 6", a heading, "Slide 4", "Foglio: Voti", or an area of the photo. Empty if unknown.'),
   source_excerpt: str('A short verbatim excerpt (max ~200 characters) the question is based on.'),
 };
 

@@ -35,6 +35,14 @@ describe('parsePath', () => {
     expect(() => parsePath('P/img/a.png')).toThrow(PathError);
     expect(parsePath('P/img/a.PNG', { attachments: true })).toMatchObject({ kind: 'attachment', contentType: 'image/png', rel: 'P/img/a.PNG' });
     expect(parsePath('P/a.md', { attachments: true })).toMatchObject({ kind: 'markdown' });
+    expect(parsePath('P/Lezione 1.docx', { attachments: true })).toMatchObject({
+      kind: 'attachment',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    expect(parsePath('P/voti.XLSX', { attachments: true }).contentType).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(parsePath('P/slide.pptx', { attachments: true }).contentType).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    // Legacy binary Office formats stay out: nothing can read them.
+    for (const old of ['P/a.doc', 'P/a.xls', 'P/a.ppt']) expect(() => parsePath(old, { attachments: true })).toThrow(PathError);
     for (const bad of ['P/a.exe', 'P/.png', 'P/a', 'a.png']) expect(() => parsePath(bad, { attachments: true })).toThrow(PathError);
   });
 

@@ -2,9 +2,12 @@
  * The notes the user picked, turned into Messages API content blocks. Claude
  * reads PDFs and images natively (handwriting and formulas included), so there
  * is no OCR step: a note is a text document, a PDF a base64 document, a photo
- * an image block preceded by its path so questions can cite it.
+ * an image block preceded by its path so questions can cite it. Word, Excel
+ * and PowerPoint files are not readable by the API: their text is extracted
+ * here (office.ts) and sent as a text document.
  */
 import type Anthropic from '@anthropic-ai/sdk';
+import { extractOfficeText, OfficeError, officeFormat } from './office';
 import { LIMITS, StudyError, type Emit, type SourceKind, type SourceRef } from './types';
 import type { WorkerClient } from './worker-client';
 
@@ -23,6 +26,7 @@ export function sourceKind(path: string): SourceKind {
   if (ext === 'md') return 'markdown';
   if (ext === 'pdf') return 'pdf';
   if (ext in IMAGE_TYPES) return 'image';
+  if (officeFormat(path)) return 'office';
   return 'unsupported';
 }
 
@@ -34,9 +38,9 @@ export interface LoadedSources {
 
 /**
  * Downloads every source through the Worker, emitting a `file` event per file,
- * and builds the content blocks. Unsupported types (SVG) are skipped with a
- * reason; a missing or forbidden file fails the whole request, since the user
- * explicitly asked for it.
+ * and builds the content blocks. Unsupported types (SVG) and Office files with
+ * no readable text are skipped with a reason; a missing or forbidden file fails
+ * the whole request, since the user explicitly asked for it.
  */
 export async function loadSources(refs: SourceRef[], kb: WorkerClient, emit: Emit): Promise<LoadedSources> {
   if (refs.length > LIMITS.maxSources) throw new StudyError('too_large', `At most ${LIMITS.maxSources} files per session`);
@@ -58,6 +62,26 @@ export async function loadSources(refs: SourceRef[], kb: WorkerClient, emit: Emi
       checkTotal(total);
       blocks.push({ type: 'document', title: ref.path, source: { type: 'text', media_type: 'text/plain', data: text } });
       emit({ event: 'file', data: { path: ref.path, status: 'ready', kind, bytes: text.length } });
+    } else if (kind === 'office') {
+      const { bytes } = await kb.readBlob(ref.path, ref.owner);
+      let text: string;
+      try {
+        text = extractOfficeText(bytes, officeFormat(ref.path)!);
+      } catch (e) {
+        if (!(e instanceof OfficeError)) throw e;
+        emit({ event: 'file', data: { path: ref.path, status: 'skipped', kind, reason: e.message } });
+        continue;
+      }
+      if (!text) {
+        emit({ event: 'file', data: { path: ref.path, status: 'skipped', kind, reason: 'Nessun testo leggibile nel file' } });
+        continue;
+      }
+      // What reaches the model is the text, which can be far larger than the zip: count that.
+      const size = new TextEncoder().encode(text).byteLength;
+      total += size;
+      checkTotal(total);
+      blocks.push({ type: 'document', title: ref.path, source: { type: 'text', media_type: 'text/plain', data: text } });
+      emit({ event: 'file', data: { path: ref.path, status: 'ready', kind, bytes: bytes.byteLength } });
     } else {
       const { bytes } = await kb.readBlob(ref.path, ref.owner);
       total += bytes.byteLength;

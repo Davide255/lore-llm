@@ -176,7 +176,7 @@ export type StudyEvent =
   | { event: 'done'; data: Record<string, unknown> }
   | { event: 'error'; data: { message: string; code: ErrorCode } };
 
-export type SourceKind = 'markdown' | 'pdf' | 'image' | 'unsupported';
+export type SourceKind = 'markdown' | 'pdf' | 'image' | 'office' | 'unsupported';
 
 export type ErrorCode =
   | 'unauthorized'

@@ -24,7 +24,7 @@ const TONE: Record<GenerateRequest['difficulty'], string> = {
 const SYSTEM = `Sei il tutor di Lore, un'app di studio. Prepari domande per verificare la preparazione dello studente sui SUOI appunti.
 
 Regole:
-- Ogni domanda nasce dagli appunti forniti (note markdown, PDF, foto anche scritte a mano). Non inventare argomenti assenti.
+- Ogni domanda nasce dagli appunti forniti (note markdown, PDF, foto anche scritte a mano, testo di documenti Word, presentazioni PowerPoint con le note del relatore e fogli Excel). Non inventare argomenti assenti.
 - Copri gli argomenti che compaiono più spesso, senza ripetere la stessa domanda in forme diverse.
 - Scrivi in italiano. Le formule in Unicode leggibile (∑ aₙ, x², lim, →, ≤), non in LaTeX.
 - Risposta multipla: 4 opzioni, una sola corretta, distrattori plausibili e di lunghezza simile; varia la posizione della corretta.
